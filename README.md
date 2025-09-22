@@ -44,23 +44,7 @@ A comprehensive real-time queue and patient flow management system designed spec
 - Python 3.11+ (for development)
 - PostgreSQL (for development)
 
-### Using Docker (Recommended)
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd eye-hospital-system
-   ```
-
-2. **Start the system**
-   ```bash
-   docker-compose up -d
-   ```
-
-3. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
 
 ### Manual Setup (Development)
 
@@ -165,21 +149,6 @@ PRINTER_PORT=9100
 REACT_APP_API_URL=http://localhost:8000
 ```
 
-## Deployment
-
-### Production Deployment
-
-1. **Update environment variables** for production
-2. **Configure SSL certificates** in nginx/ssl/
-3. **Update nginx configuration** for HTTPS
-4. **Set up database backups**
-5. **Configure printer settings**
-
-### Docker Production
-```bash
-docker-compose -f docker-compose.prod.yml up -d
-```
-
 ## Printer Setup
 
 The system supports ESC/POS thermal printers:
@@ -194,62 +163,4 @@ The system supports ESC/POS thermal printers:
 - Backend: `GET /health`
 - Database: Connection monitoring
 - WebSocket: Real-time connection status
-
-### Logs
-- Backend logs: Docker logs
-- Nginx logs: Access and error logs
-- Database logs: PostgreSQL logs
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Database Connection Failed**
-   - Check PostgreSQL is running
-   - Verify DATABASE_URL in .env
-   - Check network connectivity
-
-2. **WebSocket Connection Failed**
-   - Check CORS settings
-   - Verify Socket.IO configuration
-   - Check firewall settings
-
-3. **Printer Not Working**
-   - Verify printer IP and port
-   - Check network connectivity
-   - Test with `/api/printing/test-printer`
-
-4. **Frontend Not Loading**
-   - Check if backend is running
-   - Verify API_URL configuration
-   - Check browser console for errors
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For support and questions:
-- Create an issue in the repository
-- Contact the development team
-- Check the documentation
-
-## Changelog
-
-### Version 1.0.0
-- Initial release
-- Complete patient management system
-- Real-time queue updates
-- Multi-role user system
-- Printing integration
-- Docker deployment support
 
