@@ -32,7 +32,7 @@ class AllOPDsDisplayData(BaseModel):
     opds: List[DisplayData]
     last_updated: datetime
 
-@router.get("/{opd_type}", response_model=DisplayData)
+@router.get("/opd/{opd_type}", response_model=DisplayData)
 async def get_opd_display_data(
     opd_type: OPDType,
     db: Session = Depends(get_db)
@@ -40,7 +40,8 @@ async def get_opd_display_data(
     # Get current patient (IN_OPD status)
     current_patient_query = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status == PatientStatus.IN_OPD
+        Queue.status == PatientStatus.IN_OPD,
+        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).order_by(Queue.position).first()
     
     current_patient = None
@@ -61,7 +62,8 @@ async def get_opd_display_data(
     # Get next patients (PENDING status)
     next_patients_query = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status == PatientStatus.PENDING
+        Queue.status == PatientStatus.PENDING,
+        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).order_by(Queue.position).limit(5).all()
     
     next_patients = []
@@ -80,9 +82,10 @@ async def get_opd_display_data(
         ))
     
     # Get total patients in queue
-    total_patients = db.query(Queue).filter(
+    total_patients = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED])
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED]),
+        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).count()
     
     # Calculate estimated wait time (simplified)
@@ -103,6 +106,7 @@ async def get_opd_display_data(
 async def get_all_opds_display_data(
     db: Session = Depends(get_db)
 ):
+    """Get display data for all OPDs - used by display screens"""
     opds_data = []
     
     for opd_type in OPDType:
@@ -114,7 +118,57 @@ async def get_all_opds_display_data(
         last_updated=datetime.utcnow()
     )
 
-@router.get("/{opd_type}/waiting-list")
+@router.get("/")
+async def get_display_home(
+    db: Session = Depends(get_db)
+):
+    """Main display route - shows all OPDs with current status"""
+    today = datetime.utcnow().date()
+    
+    # Get today's summary statistics
+    total_patients_today = db.query(Patient).filter(
+        func.date(Patient.registration_time) == today
+    ).count()
+    
+    total_pending = db.query(Patient).filter(
+        Patient.current_status == PatientStatus.PENDING
+    ).count()
+    
+    total_in_opd = db.query(Patient).filter(
+        Patient.current_status == PatientStatus.IN_OPD
+    ).count()
+    
+    total_dilated = db.query(Patient).filter(
+        Patient.current_status == PatientStatus.DILATED
+    ).count()
+    
+    total_completed = db.query(Patient).filter(
+        Patient.current_status == PatientStatus.COMPLETED,
+        func.date(Patient.completed_at) == today
+    ).count()
+    
+    # Get OPD-wise data
+    opds_data = []
+    for opd_type in OPDType:
+        opd_data = await get_opd_display_data(opd_type, db)
+        opds_data.append(opd_data)
+    
+    return {
+        "hospital_name": "Eye Hospital",
+        "date": today.isoformat(),
+        "time": datetime.utcnow().strftime("%H:%M:%S"),
+        "summary": {
+            "total_patients_today": total_patients_today,
+            "total_pending": total_pending,
+            "total_in_opd": total_in_opd,
+            "total_dilated": total_dilated,
+            "total_completed": total_completed
+        },
+        "opds": opds_data,
+        "last_updated": datetime.utcnow().isoformat()
+    }
+
+@router.get("/opd/{opd_type}/waiting-list")
 async def get_waiting_list(
     opd_type: OPDType,
     limit: int = 10,
@@ -123,7 +177,8 @@ async def get_waiting_list(
     """Get detailed waiting list for an OPD"""
     waiting_patients = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.DILATED])
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.DILATED]),
+        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).order_by(Queue.position).limit(limit).all()
     
     waiting_list = []
@@ -174,7 +229,7 @@ async def get_display_overview(
     ).count()
     
     total_completed = db.query(Patient).filter(
-        Patient.current_status == PatientStatus.END_VISIT,
+        Patient.current_status == PatientStatus.COMPLETED,
         func.date(Patient.completed_at) == today
     ).count()
     

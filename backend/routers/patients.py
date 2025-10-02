@@ -419,15 +419,11 @@ async def end_patient_visit(
     patient.referred_from = None # Clear referral status
     patient.referred_to = None # Clear referral status
 
-    # Update queue entry for the OPD they were in (if any)
-    
-    queue_entry = db.query(Queue).filter(
-        Queue.patient_id == patient_id,
-        Queue.opd_type == opd_to_update
-    ).first()
-    print("queue_entry", queue_entry)
-    if queue_entry:
-        queue_entry.status = PatientStatus.COMPLETED # Mark as completed in queue
+    # Remove patient from ALL queue entries (they should not appear in any queue after completion)
+    queue_entries = db.query(Queue).filter(Queue.patient_id == patient_id).all()
+    print("queue_entries to remove", queue_entries)
+    for queue_entry in queue_entries:
+        db.delete(queue_entry)
 
     # Log patient flow
     flow_entry = PatientFlow(
@@ -444,7 +440,8 @@ async def end_patient_visit(
 
     # Broadcast updates
     
-    await broadcast_queue_update(opd_to_update, db) # Update the queue they just left
+    if opd_to_update:
+        await broadcast_queue_update(opd_to_update, db) # Update the queue they just left
     await broadcast_patient_status_update(patient_id, PatientStatus.COMPLETED, db)
     await broadcast_display_update()
 

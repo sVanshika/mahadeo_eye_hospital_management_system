@@ -33,10 +33,11 @@ async def leave_opd(sid, data):
 
 async def broadcast_queue_update(opd_type: OPDType, db: Session):
     """Broadcast queue update to all clients in the OPD room"""
-    # Get current queue for the OPD
-    queue_entries = db.query(Queue).filter(
+    # Get current queue for the OPD, excluding completed patients
+    queue_entries = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD])
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]),
+        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).order_by(Queue.position).all()
     
     queue_data = []

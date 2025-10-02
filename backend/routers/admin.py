@@ -174,13 +174,13 @@ async def get_dashboard_stats(
     ).count()
     
     total_patients_completed = db.query(Patient).filter(
-        Patient.current_status == PatientStatus.END_VISIT,
+        Patient.current_status == PatientStatus.COMPLETED,
         func.date(Patient.completed_at) == today
     ).count()
     
     # Calculate average waiting time
     completed_patients = db.query(Patient).filter(
-        Patient.current_status == PatientStatus.END_VISIT,
+        Patient.current_status == PatientStatus.COMPLETED,
         func.date(Patient.completed_at) == today
     ).all()
     
@@ -206,8 +206,7 @@ async def get_dashboard_stats(
             Queue.status == PatientStatus.IN_OPD
         ).count()
         opd_completed = db.query(Patient).filter(
-            Patient.allocated_opd == opd_type,
-            Patient.current_status == PatientStatus.END_VISIT,
+            Patient.current_status == PatientStatus.COMPLETED,
             func.date(Patient.completed_at) == today
         ).count()
         
@@ -288,14 +287,14 @@ async def get_daily_report(
     
     # Calculate statistics
     total_patients = len(patients)
-    completed_patients = len([p for p in patients if p.current_status == PatientStatus.END_VISIT])
+    completed_patients = len([p for p in patients if p.current_status == PatientStatus.COMPLETED])
     pending_patients = len([p for p in patients if p.current_status == PatientStatus.PENDING])
     in_opd_patients = len([p for p in patients if p.current_status == PatientStatus.IN_OPD])
     dilated_patients = len([p for p in patients if p.current_status == PatientStatus.DILATED])
     referred_patients = len([p for p in patients if p.current_status == PatientStatus.REFERRED])
     
     # Calculate average processing time
-    completed_with_times = [p for p in patients if p.current_status == PatientStatus.END_VISIT and p.completed_at]
+    completed_with_times = [p for p in patients if p.current_status == PatientStatus.COMPLETED and p.completed_at]
     avg_processing_time = None
     if completed_with_times:
         total_time = sum((p.completed_at - p.registration_time).total_seconds() for p in completed_with_times)
@@ -307,7 +306,7 @@ async def get_daily_report(
         opd_patients = [p for p in patients if p.allocated_opd == opd_type]
         opd_breakdown[opd_type.value] = {
             "total": len(opd_patients),
-            "completed": len([p for p in opd_patients if p.current_status == PatientStatus.END_VISIT]),
+            "completed": len([p for p in opd_patients if p.current_status == PatientStatus.COMPLETED]),
             "pending": len([p for p in opd_patients if p.current_status == PatientStatus.PENDING]),
             "in_progress": len([p for p in opd_patients if p.current_status == PatientStatus.IN_OPD])
         }

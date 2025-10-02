@@ -251,16 +251,14 @@ async def get_opd_stats(
     
     # Get completed patients today
     completed_today = db.query(Patient).filter(
-        Patient.allocated_opd == opd_type,
-        Patient.current_status == PatientStatus.END_VISIT,
+        Patient.current_status == PatientStatus.COMPLETED,
         func.date(Patient.completed_at) == today
     ).count()
     
     # Calculate average waiting time (simplified)
     avg_waiting_time = None
     completed_patients = db.query(Patient).filter(
-        Patient.allocated_opd == opd_type,
-        Patient.current_status == PatientStatus.END_VISIT,
+        Patient.current_status == PatientStatus.COMPLETED,
         func.date(Patient.completed_at) == today
     ).all()
     
