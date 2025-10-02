@@ -73,6 +73,7 @@ const DisplayScreen = () => {
       dilated: 'secondary',
       referred: 'error',
       end_visit: 'success',
+      completed: 'success',
     };
     return statusColors[status] || 'default';
   };
@@ -84,6 +85,7 @@ const DisplayScreen = () => {
       dilated: 'Dilated',
       referred: 'Referred',
       end_visit: 'Completed',
+      completed: 'Completed',
     };
     return statusLabels[status] || status;
   };
