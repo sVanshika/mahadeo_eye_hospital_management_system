@@ -24,10 +24,10 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Alert,
   Paper,
   Typography as MuiTypography,
   Divider,
+  Tooltip
 } from '@mui/material';
 import {
   ArrowBack,
@@ -43,19 +43,21 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
+import { useNotification } from '../contexts/NotificationContext';
 import axios from 'axios';
 
 const OPDManagement = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { joinOPD, leaveOPD, onQueueUpdate, removeAllListeners } = useSocket();
+  const { showSuccess, showError, showWarning } = useNotification();
   const [selectedOpd, setSelectedOpd] = useState('opd1');
   const [queue, setQueue] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [actionDialog, setActionDialog] = useState({ open: false, type: '', patient: null });
+  const [referredFromHere, setReferredFromHere] = useState([]); // referred from selectedOpd to elsewhere
+  const [referredToHere, setReferredToHere] = useState([]);     // referred from elsewhere to selectedOpd
 
   const opdTypes = [
     { value: 'opd1', label: 'OPD 1' },
@@ -66,6 +68,7 @@ const OPDManagement = () => {
   useEffect(() => {
     fetchQueueData();
     fetchStats();
+    fetchReferred();
     
     // Join OPD room for real-time updates
     joinOPD(selectedOpd);
@@ -87,6 +90,7 @@ const OPDManagement = () => {
     try {
       const response = await axios.get(`http://localhost:8000/api/opd/${selectedOpd}/queue`);
       setQueue(response.data);
+      console.log(`\n\nQueue data:`, response.data);
     } catch (error) {
       console.error('Failed to fetch queue:', error);
     }
@@ -96,8 +100,24 @@ const OPDManagement = () => {
     try {
       const response = await axios.get(`http://localhost:8000/api/opd/${selectedOpd}/stats`);
       setStats(response.data);
+      console.log(`\n\nStats data:`, response.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  const fetchReferred = async () => {
+    try {
+      console.log(`\n\nFetching referred patients from ${selectedOpd}`);
+      console.log(`\n\nFetching referred patients to ${selectedOpd}`);
+      const [fromResp, toResp] = await Promise.all([
+        axios.get(`http://localhost:8000/api/patients/referred`, { params: { from_opd: selectedOpd } }),
+        axios.get(`http://localhost:8000/api/patients/referred`, { params: { to_opd: selectedOpd } })
+      ]);
+      setReferredFromHere(fromResp.data || []);
+      setReferredToHere(toResp.data || []);
+    } catch (error) {
+      console.error('Failed to fetch referred patients:', error);
     }
   };
 
@@ -105,11 +125,12 @@ const OPDManagement = () => {
     setLoading(true);
     try {
       const response = await axios.post(`http://localhost:8000/api/opd/${selectedOpd}/call-next`);
-      setSuccess(response.data.message);
+      showSuccess(response.data.message);
       fetchQueueData();
       fetchStats();
+      fetchReferred();
     } catch (error) {
-      setError(error.response?.data?.detail || 'Failed to call next patient');
+      showError(error.response?.data?.detail || 'Failed to call next patient');
     } finally {
       setLoading(false);
     }
@@ -139,6 +160,18 @@ const OPDManagement = () => {
     });
   };
 
+  const handleEndVisit = (patient) => {
+    console.log(`\n\nEnding visit for patient ${patient.token_number}`);
+    setActionDialog({
+      open: true,
+      type: 'end_visit',
+      patient: patient,
+      title: 'Confirm End Visit',
+      message: `Are you sure you want to end the visit for patient ${patient.token_number} (${patient.patient_name})? This will mark their visit as completed.`,
+    });
+  };
+
+
   const confirmAction = async () => {
     const { type, patient } = actionDialog;
     setLoading(true);
@@ -146,23 +179,28 @@ const OPDManagement = () => {
     try {
       if (type === 'dilate') {
         await axios.post(`http://localhost:8000/api/opd/${selectedOpd}/dilate-patient/${patient.patient_id}`);
-        setSuccess(`Patient ${patient.token_number} marked for dilation`);
+        showSuccess(`Patient ${patient.token_number} marked for dilation`);
       } else if (type === 'refer') {
         const targetOpd = actionDialog.targetOpd;
         await axios.post(`http://localhost:8000/api/patients/${patient.patient_id}/refer`, {
           to_opd: targetOpd,
         });
-        setSuccess(`Patient ${patient.token_number} referred to ${targetOpd.toUpperCase()}`);
+        showSuccess(`Patient ${patient.token_number} referred to ${targetOpd.toUpperCase()}`);
       } else if (type === 'return_dilated') {
         await axios.post(`http://localhost:8000/api/opd/${selectedOpd}/return-dilated/${patient.patient_id}`);
-        setSuccess(`Patient ${patient.token_number} returned from dilation`);
+        showSuccess(`Patient ${patient.token_number} returned from dilation`);
+      } else if (type === 'end_visit') {
+        await axios.post(`http://localhost:8000/api/patients/${patient.patient_id}/endvisit`);
+        showSuccess(`Patient ${patient.token_number} visit completed`);
+        
       }
       
       setActionDialog({ open: false, type: '', patient: null });
       fetchQueueData();
       fetchStats();
+      fetchReferred();
     } catch (error) {
-      setError(error.response?.data?.detail || 'Action failed');
+      showError(error.response?.data?.detail || 'Action failed');
     } finally {
       setLoading(false);
     }
@@ -292,17 +330,6 @@ const OPDManagement = () => {
           </Grid>
         )}
 
-        {/* Alerts */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {success}
-          </Alert>
-        )}
 
         <Grid container spacing={3}>
           {/* Queue Management */}
@@ -372,6 +399,18 @@ const OPDManagement = () => {
                                 <PersonAdd />
                               </IconButton>
                             )}
+                            { (
+                              <Tooltip title="End Visit" enterDelay={0} leaveDelay={0}>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleEndVisit(patient)}
+                                color="success"
+                                tooltip="End Visit"
+                              >
+                                <CheckCircle /> {/* Assuming DoneAll icon is available or will be imported */}
+                              </IconButton>
+                              </Tooltip>
+                            )}
                           </Box>
                         </ListItemSecondaryAction>
                       </ListItem>
@@ -412,6 +451,67 @@ const OPDManagement = () => {
             </Card>
           </Grid>
         </Grid>
+
+      {/* Referred Patients Dashboard */}
+      <Grid container spacing={3} sx={{ mt: 3 }}>
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Referred Patients (OPD: {selectedOpd.toUpperCase()})
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Referred FROM this OPD
+                  </Typography>
+                  <List>
+                    {referredFromHere.length === 0 && (
+                      <ListItem>
+                        <ListItemText primary="No referred patients from this OPD" />
+                      </ListItem>
+                    )}
+                    {referredFromHere.map((p) => (
+                      <ListItem key={`from-${p.id}`} divider>
+                        <ListItemText
+                          primary={`${p.token_number} - ${p.name}`}
+                          secondary={`To: ${p.to_opd?.toUpperCase()} | Registered: ${new Date(p.registration_time).toLocaleString()}`}
+                        />
+                        <ListItemSecondaryAction>
+                          <Chip label="Referred" color="error" size="small" />
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Referred TO this OPD
+                  </Typography>
+                  <List>
+                    {referredToHere.length === 0 && (
+                      <ListItem>
+                        <ListItemText primary="No patients referred to this OPD" />
+                      </ListItem>
+                    )}
+                    {referredToHere.map((p) => (
+                      <ListItem key={`to-${p.id}`} divider>
+                        <ListItemText
+                          primary={`${p.token_number} - ${p.name}`}
+                          secondary={`From: ${p.from_opd?.toUpperCase() || 'N/A'} | Registered: ${new Date(p.registration_time).toLocaleString()}`}
+                        />
+                        <ListItemSecondaryAction>
+                          <Chip label="Referred" color="error" size="small" />
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
         {/* Action Dialog */}
         <Dialog open={actionDialog.open} onClose={() => setActionDialog({ open: false, type: '', patient: null })}>

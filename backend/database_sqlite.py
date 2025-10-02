@@ -23,6 +23,7 @@ class PatientStatus(str, enum.Enum):
     DILATED = "dilated"
     REFERRED = "referred"
     COME_BACK = "come_back"
+    COMPLETED = "completed"
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"

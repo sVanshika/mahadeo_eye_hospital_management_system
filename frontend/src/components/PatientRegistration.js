@@ -10,7 +10,6 @@ import {
   CardContent,
   TextField,
   Grid,
-  Alert,
   Paper,
   List,
   ListItem,
@@ -36,11 +35,13 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotification } from '../contexts/NotificationContext';
 import axios from 'axios';
 
 const PatientRegistration = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showSuccess, showError, showWarning } = useNotification();
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -48,8 +49,6 @@ const PatientRegistration = () => {
   });
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState('');
-  const [error, setError] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [opdDialogOpen, setOpdDialogOpen] = useState(false);
   const [selectedOpd, setSelectedOpd] = useState('');
@@ -84,8 +83,6 @@ const PatientRegistration = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    setSuccess('');
 
     try {
       const response = await axios.post('http://localhost:8000/api/patients/register', {
@@ -94,11 +91,11 @@ const PatientRegistration = () => {
         phone: formData.phone || null,
       });
 
-      setSuccess(`Patient registered successfully! Token: ${response.data.token_number}`);
+      showSuccess(`Patient registered successfully! Token: ${response.data.token_number}`);
       setFormData({ name: '', age: '', phone: '' });
       fetchPatients();
     } catch (error) {
-      setError(error.response?.data?.detail || 'Registration failed');
+      showError(error.response?.data?.detail || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -110,20 +107,22 @@ const PatientRegistration = () => {
   };
 
   const confirmOpdAllocation = async () => {
+    console.log(`\n\nConfirming OPD allocation:`, selectedPatient, selectedOpd);
+  
     if (!selectedPatient || !selectedOpd) return;
-
+    console.log(`\n\nLAST Confirming OPD allocation:`, selectedPatient, selectedOpd);
     try {
       const response = await axios.post(`http://localhost:8000/api/patients/${selectedPatient.id}/allocate-opd`, {
         opd_type: selectedOpd,
       });
 
-      setSuccess(`Patient allocated to ${selectedOpd.toUpperCase()}. Queue position: ${response.data.queue_position}`);
+      showSuccess(`Patient allocated to ${selectedOpd.toUpperCase()}. Queue position: ${response.data.queue_position}`);
       setOpdDialogOpen(false);
       setSelectedPatient(null);
       setSelectedOpd('');
       fetchPatients();
     } catch (error) {
-      setError(error.response?.data?.detail || 'OPD allocation failed');
+      showError(error.response?.data?.detail || 'OPD allocation failed');
     }
   };
 
@@ -179,18 +178,6 @@ const PatientRegistration = () => {
                 <Typography variant="h6" gutterBottom>
                   Register New Patient
                 </Typography>
-                
-                {error && (
-                  <Alert severity="error" sx={{ mb: 2 }}>
-                    {error}
-                  </Alert>
-                )}
-                
-                {success && (
-                  <Alert severity="success" sx={{ mb: 2 }}>
-                    {success}
-                  </Alert>
-                )}
 
                 <Box component="form" onSubmit={handleSubmit}>
                   <TextField
