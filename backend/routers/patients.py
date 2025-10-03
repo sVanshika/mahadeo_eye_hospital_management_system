@@ -107,7 +107,8 @@ async def register_patient(
         token_number=token_number,
         name=patient_data.name,
         age=patient_data.age,
-        phone=patient_data.phone
+        phone=patient_data.phone,
+        registration_time=datetime.now()
     )
     
     db.add(db_patient)
@@ -340,7 +341,7 @@ async def refer_patient(
 
 
     
-
+'''
 @router.get("/referred", response_model=List[ReferredPatientResponse])
 async def list_referred_patients(
     from_opd: Optional[str] = Query(default=None, alias="from_opd"),
@@ -375,22 +376,37 @@ async def list_referred_patients(
         ))
 
     return result
+'''
 
 @router.get("/", response_model=List[PatientResponse])
 async def get_patients(
     skip: int = 0,
     limit: int = 100,
     status: Optional[PatientStatus] = None,
+    latest: Optional[bool] = Query(False), # New parameter to fetch latest patients
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    print("get_patients")
     query = db.query(Patient)
+    print("status", status)
+    print("latest", latest)
+    
     if status:
         query = query.filter(Patient.current_status == status)
     
-    patients = query.offset(skip).limit(limit).all()
+    if latest:
+        # If 'latest' is true, order by registration time descending and limit to 5
+        patients = query.order_by(Patient.registration_time.desc()).limit(5).all()
+        print("Fetching latest 5 patients.")
+    else:
+        # Otherwise, apply skip and limit for general pagination
+        patients = query.order_by(Patient.registration_time.desc()).offset(skip).limit(limit).all()
+        print(f"Fetching patients with skip={skip}, limit={limit}.")
+    
+    for patient in patients:
+        print(patient.name, patient.registration_time)
     return patients
-
 
 
 

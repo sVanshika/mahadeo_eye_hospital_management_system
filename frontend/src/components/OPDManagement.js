@@ -234,7 +234,12 @@ const OPDManagement = () => {
     const now = new Date();
     const regTime = new Date(registrationTime);
     const diffMinutes = Math.floor((now - regTime) / (1000 * 60));
-    return `${diffMinutes} min`;
+    console.log(diffMinutes);
+    let hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+    const days = Math.floor(hours / 24);
+    hours = hours % 24;
+    return ` ${days}d ${hours}h ${minutes}m`;
   };
 
   return (

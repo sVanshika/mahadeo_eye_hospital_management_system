@@ -48,6 +48,7 @@ const PatientRegistration = () => {
     phone: '',
   });
   const [patients, setPatients] = useState([]);
+  const [all_patients, setAllPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [opdDialogOpen, setOpdDialogOpen] = useState(false);
@@ -65,8 +66,12 @@ const PatientRegistration = () => {
 
   const fetchPatients = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/patients');
+      const response = await axios.get('http://localhost:8000/api/patients', { params: { latest: true } });
       setPatients(response.data);
+
+      const response_all_patients = await axios.get('http://localhost:8000/api/patients', { params: { latest: false } });
+      setAllPatients(response_all_patients.data);
+
     } catch (error) {
       console.error('Failed to fetch patients:', error);
     }
@@ -272,7 +277,7 @@ const PatientRegistration = () => {
                   All Patients
                 </Typography>
                 <List>
-                  {patients.map((patient) => (
+                  {all_patients.map((patient) => (
                     <ListItem key={patient.id} divider>
                       <ListItemText
                         primary={`${patient.token_number} - ${patient.name}`}
@@ -285,21 +290,21 @@ const PatientRegistration = () => {
                             color={getStatusColor(patient.current_status)}
                             size="small"
                           />
-                          {patient.allocated_opd && (
-                            <Chip
-                              label={patient.allocated_opd.toUpperCase()}
-                              color="primary"
-                              size="small"
-                            />
-                          )}
-                          {!patient.allocated_opd && (
-                            <IconButton
-                              edge="end"
-                              onClick={() => handleAllocateOpd(patient)}
-                              color="primary"
-                            >
-                              <PersonAdd />
-                            </IconButton>
+                              {patient.allocated_opd && (
+                                <Chip
+                                  label={patient.allocated_opd.toUpperCase()}
+                                  color="primary"
+                                  size="small"
+                                />
+                              )}
+                              {!patient.allocated_opd && (
+                                <IconButton
+                                  edge="end"
+                                  onClick={() => handleAllocateOpd(patient)}
+                                  color="primary"
+                                >
+                                  <PersonAdd />
+                                </IconButton>
                           )}
                         </Box>
                       </ListItemSecondaryAction>
