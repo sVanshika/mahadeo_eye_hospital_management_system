@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, Patient, Queue, PatientStatus, OPDType, PatientFlow
+from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow
 from auth import get_current_active_user, User, require_role, UserRole
 from websocket_manager import broadcast_queue_update, broadcast_patient_status_update, broadcast_display_update
 
@@ -27,7 +27,8 @@ class QueueResponse(BaseModel):
         from_attributes = True
 
 class OPDStats(BaseModel):
-    opd_type: OPDType
+    opd_type: str
+    opd_name: str
     total_patients: int
     pending_patients: int
     in_opd_patients: int
@@ -38,10 +39,15 @@ class OPDStats(BaseModel):
 
 @router.get("/{opd_type}/queue", response_model=List[QueueResponse])
 async def get_opd_queue(
-    opd_type: OPDType,
+    opd_type: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    # Validate OPD exists and is active
+    opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
+    if not opd:
+        raise HTTPException(status_code=404, detail="OPD not found or inactive")
+    
     queue_entries = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
         Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED])
@@ -75,10 +81,15 @@ async def get_opd_queue(
 
 @router.post("/{opd_type}/call-next")
 async def call_next_patient(
-    opd_type: OPDType,
+    opd_type: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
+    # Validate OPD exists and is active
+    opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
+    if not opd:
+        raise HTTPException(status_code=404, detail="OPD not found or inactive")
+    
     # Get next patient in queue
     next_patient = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
@@ -121,7 +132,7 @@ async def call_next_patient(
 
 @router.post("/{opd_type}/dilate-patient/{patient_id}")
 async def dilate_patient(
-    opd_type: OPDType,
+    opd_type: str,
     patient_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
@@ -168,7 +179,7 @@ async def dilate_patient(
 
 @router.post("/{opd_type}/return-dilated/{patient_id}")
 async def return_dilated_patient(
-    opd_type: OPDType,
+    opd_type: str,
     patient_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
@@ -224,10 +235,15 @@ async def return_dilated_patient(
 
 @router.get("/{opd_type}/stats", response_model=OPDStats)
 async def get_opd_stats(
-    opd_type: OPDType,
+    opd_type: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    # Validate OPD exists and is active
+    opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
+    if not opd:
+        raise HTTPException(status_code=404, detail="OPD not found or inactive")
+    
     today = datetime.utcnow().date()
     
     # Get queue statistics
@@ -272,6 +288,7 @@ async def get_opd_stats(
     
     return OPDStats(
         opd_type=opd_type,
+        opd_name=opd.opd_name,
         total_patients=total_patients,
         pending_patients=pending_patients,
         in_opd_patients=in_opd_patients,
@@ -287,8 +304,15 @@ async def get_all_opd_stats(
     current_user: User = Depends(get_current_active_user)
 ):
     stats = []
-    for opd_type in OPDType:
-        opd_stats = await get_opd_stats(opd_type, db, current_user)
-        stats.append(opd_stats)
+    # Get all active OPDs
+    active_opds = db.query(OPD).filter(OPD.is_active == True).all()
+    
+    for opd in active_opds:
+        try:
+            opd_stats = await get_opd_stats(opd.opd_code, db, current_user)
+            stats.append(opd_stats)
+        except HTTPException:
+            # Skip OPDs that have no data or are inactive
+            continue
     
     return stats

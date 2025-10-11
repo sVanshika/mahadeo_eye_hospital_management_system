@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  AppBar,
-  Toolbar,
-  Typography,
   Button,
   Container,
   Card,
   CardContent,
   TextField,
   Grid,
-  Paper,
   List,
   ListItem,
   ListItemText,
@@ -25,24 +21,22 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Tooltip
+  Tooltip,
+  Typography
 } from '@mui/material';
 import {
-  ArrowBack,
   PersonAdd,
-  Print,
-  Refresh,
-  CheckCircle,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { useOPD } from '../contexts/OPDContext';
 import axios from 'axios';
+import Navbar from './Navbar';
 
 const PatientRegistration = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { showSuccess, showError, showWarning } = useNotification();
+  const { showSuccess, showError } = useNotification();
+  const { activeOPDs } = useOPD();
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -54,12 +48,6 @@ const PatientRegistration = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [opdDialogOpen, setOpdDialogOpen] = useState(false);
   const [selectedOpd, setSelectedOpd] = useState('');
-
-  const opdTypes = [
-    { value: 'opd1', label: 'OPD 1' },
-    { value: 'opd2', label: 'OPD 2' },
-    { value: 'opd3', label: 'OPD 3' },
-  ];
 
   useEffect(() => {
     fetchPatients();
@@ -158,24 +146,7 @@ const PatientRegistration = () => {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static">
-        <Toolbar>
-          <IconButton
-            edge="start"
-            color="inherit"
-            onClick={() => navigate('/dashboard')}
-            sx={{ mr: 2 }}
-          >
-            <ArrowBack />
-          </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Patient Registration
-          </Typography>
-          <Button color="inherit" onClick={fetchPatients} startIcon={<Refresh />}>
-            Refresh
-          </Button>
-        </Toolbar>
-      </AppBar>
+      <Navbar onRefresh={fetchPatients} pageTitle="Patient Registration" />
 
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Grid container spacing={3}>
@@ -261,7 +232,7 @@ const PatientRegistration = () => {
                                   size="small"
                                 />
                               )}
-                              {!patient.allocated_opd && patient.current_status != 'completed' && (
+                              {!patient.allocated_opd && patient.current_status !== 'completed' && (
                                 <Tooltip title="Allocate OPD" enterDelay={0} leaveDelay={0}>
                                   <IconButton
                                     edge="end"
@@ -309,7 +280,7 @@ const PatientRegistration = () => {
                                   size="small"
                                 />
                               )}
-                              {!patient.allocated_opd && patient.current_status != 'completed' && (
+                              {!patient.allocated_opd && patient.current_status !== 'completed' && (
                                 <Tooltip title="Allocate OPD" enterDelay={0} leaveDelay={0}>
                                   <IconButton
                                     edge="end"
@@ -344,9 +315,9 @@ const PatientRegistration = () => {
                 onChange={(e) => setSelectedOpd(e.target.value)}
                 label="Select OPD"
               >
-                {opdTypes.map((opd) => (
-                  <MenuItem key={opd.value} value={opd.value}>
-                    {opd.label}
+                {activeOPDs.map((opd) => (
+                  <MenuItem key={opd.opd_code} value={opd.opd_code}>
+                    {opd.opd_name}
                   </MenuItem>
                 ))}
               </Select>

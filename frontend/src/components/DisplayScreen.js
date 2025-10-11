@@ -13,24 +13,19 @@ import {
   ListItemIcon,
   Chip,
   Divider,
-  AppBar,
-  Toolbar,
-  IconButton,
-  Button,
 } from '@mui/material';
 import {
-  Refresh,
-  Visibility,
   LocalHospital,
-  Schedule,
   CheckCircle,
-  Person,
 } from '@mui/icons-material';
 import { useSocket } from '../contexts/SocketContext';
+import { useOPD } from '../contexts/OPDContext';
 import axios from 'axios';
+import Navbar from './Navbar';
 
 const DisplayScreen = () => {
   const { joinDisplay, leaveDisplay, onDisplayUpdate, removeAllListeners } = useSocket();
+  const { activeOPDs, getOPDByCode } = useOPD();
   const [displayData, setDisplayData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -113,16 +108,11 @@ const DisplayScreen = () => {
 
   return (
     <Box sx={{ flexGrow: 1, bgcolor: '#f5f5f5', minHeight: '100vh' }}>
-      <AppBar position="static" color="primary">
-        <Toolbar>
-          <Typography variant="h4" component="div" sx={{ flexGrow: 1, textAlign: 'center' }}>
-            Eye Hospital - Patient Queue Display
-          </Typography>
-          <IconButton color="inherit" onClick={fetchDisplayData}>
-            <Refresh />
-          </IconButton>
-        </Toolbar>
-      </AppBar>
+      <Navbar 
+        onRefresh={fetchDisplayData} 
+        pageTitle="Patient Queue Display"
+        showRefresh={true}
+      />
 
       <Container maxWidth="xl" sx={{ mt: 2, mb: 2 }}>
         {lastUpdated && (
@@ -139,7 +129,7 @@ const DisplayScreen = () => {
                   <Box display="flex" alignItems="center" mb={2}>
                     <LocalHospital color="primary" sx={{ mr: 1 }} />
                     <Typography variant="h5" component="h2">
-                      {opd.opd_type.toUpperCase()}
+                      {getOPDByCode(opd.opd_type)?.opd_name || opd.opd_type.toUpperCase()}
                     </Typography>
                   </Box>
 

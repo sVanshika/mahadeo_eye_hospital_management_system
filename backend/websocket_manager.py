@@ -1,7 +1,7 @@
 import socketio
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from database_sqlite import get_db, Queue, Patient, OPDType, PatientStatus
+from database_sqlite import get_db, Queue, Patient, PatientStatus
 from typing import List, Dict
 import json
 
@@ -31,7 +31,7 @@ async def leave_opd(sid, data):
         sio.leave_room(sid, f"opd_{opd_type}")
         print(f"Client {sid} left OPD {opd_type}")
 
-async def broadcast_queue_update(opd_type: OPDType, db: Session):
+async def broadcast_queue_update(opd_type: str, db: Session):
     """Broadcast queue update to all clients in the OPD room"""
     # Get current queue for the OPD, excluding completed patients
     queue_entries = db.query(Queue).join(Patient).filter(

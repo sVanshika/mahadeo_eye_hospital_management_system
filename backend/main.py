@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import os
 
 from database_sqlite import engine, Base
-from routers import auth, patients, opd, admin, display, printing
+from routers import auth, patients, opd, admin, display, printing, opd_management
 from websocket_manager import sio
 
 load_dotenv()
@@ -45,6 +45,7 @@ app.include_router(opd.router, prefix="/api/opd", tags=["opd"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(display.router, prefix="/api/display", tags=["display"])
 app.include_router(printing.router, prefix="/api/printing", tags=["printing"])
+app.include_router(opd_management.router, prefix="/api/opd-management", tags=["opd-management"])
 
 # Mount Socket.IO
 app.mount("/socket.io", socketio.ASGIApp(sio))

@@ -1,40 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  AppBar,
-  Toolbar,
-  Typography,
-  Button,
   Container,
   Grid,
   Card,
   CardContent,
-  CardActions,
   Paper,
   List,
   ListItem,
   ListItemText,
-  ListItemIcon,
-  Chip,
-  IconButton,
+  Typography,
 } from '@mui/material';
 import {
   PersonAdd,
   LocalHospital,
   AdminPanelSettings,
   Visibility,
-  ExitToApp,
-  Refresh,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Navbar from './Navbar';
 
 const Dashboard = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchStats();
@@ -46,23 +37,7 @@ const Dashboard = () => {
       setStats(response.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
-    } finally {
-      setLoading(false);
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const getRoleDisplayName = (role) => {
-    const roleMap = {
-      admin: 'Administrator',
-      registration: 'Registration Staff',
-      nursing: 'Nursing Staff',
-    };
-    return roleMap[role] || role;
   };
 
   const getQuickActions = () => {
@@ -111,22 +86,7 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Eye Hospital Patient Management System
-          </Typography>
-          <Typography variant="body2" sx={{ mr: 2 }}>
-            Welcome, {user.username} ({getRoleDisplayName(user.role)})
-          </Typography>
-          <IconButton color="inherit" onClick={fetchStats}>
-            <Refresh />
-          </IconButton>
-          <Button color="inherit" onClick={handleLogout} startIcon={<ExitToApp />}>
-            Logout
-          </Button>
-        </Toolbar>
-      </AppBar>
+      <Navbar onRefresh={fetchStats} pageTitle="Dashboard" />
 
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Grid container spacing={3}>

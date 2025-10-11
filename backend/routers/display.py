@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, Patient, Queue, PatientStatus, OPDType
+from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD
 from auth import get_current_active_user, User
 
 router = APIRouter()
@@ -22,7 +22,7 @@ class DisplayQueueItem(BaseModel):
         from_attributes = True
 
 class DisplayData(BaseModel):
-    opd_type: OPDType
+    opd_type: str
     current_patient: Optional[DisplayQueueItem]
     next_patients: List[DisplayQueueItem]
     total_patients: int
@@ -34,7 +34,7 @@ class AllOPDsDisplayData(BaseModel):
 
 @router.get("/opd/{opd_type}", response_model=DisplayData)
 async def get_opd_display_data(
-    opd_type: OPDType,
+    opd_type: str,
     db: Session = Depends(get_db)
 ):
     # Get current patient (IN_OPD status)
@@ -109,8 +109,10 @@ async def get_all_opds_display_data(
     """Get display data for all OPDs - used by display screens"""
     opds_data = []
     
-    for opd_type in OPDType:
-        opd_data = await get_opd_display_data(opd_type, db)
+    # Get all active OPDs from database
+    active_opds = db.query(OPD).filter(OPD.is_active == True).all()
+    for opd in active_opds:
+        opd_data = await get_opd_display_data(opd.opd_code, db)
         opds_data.append(opd_data)
     
     return AllOPDsDisplayData(
@@ -149,8 +151,9 @@ async def get_display_home(
     
     # Get OPD-wise data
     opds_data = []
-    for opd_type in OPDType:
-        opd_data = await get_opd_display_data(opd_type, db)
+    active_opds = db.query(OPD).filter(OPD.is_active == True).all()
+    for opd in active_opds:
+        opd_data = await get_opd_display_data(opd.opd_code, db)
         opds_data.append(opd_data)
     
     return {
@@ -170,7 +173,7 @@ async def get_display_home(
 
 @router.get("/opd/{opd_type}/waiting-list")
 async def get_waiting_list(
-    opd_type: OPDType,
+    opd_type: str,
     limit: int = 10,
     db: Session = Depends(get_db)
 ):
@@ -235,7 +238,7 @@ async def get_display_overview(
     
     # Get OPD-wise counts
     opd_counts = {}
-    for opd_type in OPDType:
+    for opd_type in str:
         opd_pending = db.query(Queue).filter(
             Queue.opd_type == opd_type,
             Queue.status == PatientStatus.PENDING

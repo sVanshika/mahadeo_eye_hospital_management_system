@@ -30,10 +30,7 @@ class UserRole(str, enum.Enum):
     REGISTRATION = "registration"
     NURSING = "nursing"
 
-class OPDType(str, enum.Enum):
-    OPD1 = "opd1"
-    OPD2 = "opd2"
-    OPD3 = "opd3"
+# OPDType enum removed - now using dynamic OPD table
 
 # Database Models
 class User(Base):
@@ -46,6 +43,17 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class OPD(Base):
+    __tablename__ = "opds"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    opd_code = Column(String, unique=True, index=True, nullable=False)  # e.g., "opd1", "opd2"
+    opd_name = Column(String, nullable=False)  # e.g., "OPD 1", "General OPD"
+    description = Column(String)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
 
 class Room(Base):
     __tablename__ = "rooms"
@@ -67,7 +75,7 @@ class Patient(Base):
     phone = Column(String)
     registration_time = Column(DateTime, default=datetime.utcnow)
     current_status = Column(SQLEnum(PatientStatus), default=PatientStatus.PENDING)
-    allocated_opd = Column(SQLEnum(OPDType))
+    allocated_opd = Column(String)  # Now stores OPD code as string
     current_room = Column(String)
     is_dilated = Column(Boolean, default=False)
     dilation_time = Column(DateTime)
@@ -79,7 +87,7 @@ class Queue(Base):
     __tablename__ = "queues"
     
     id = Column(Integer, primary_key=True, index=True)
-    opd_type = Column(SQLEnum(OPDType), nullable=False)
+    opd_type = Column(String, nullable=False)  # Now stores OPD code as string
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
     position = Column(Integer, nullable=False)
     status = Column(SQLEnum(PatientStatus), default=PatientStatus.PENDING)

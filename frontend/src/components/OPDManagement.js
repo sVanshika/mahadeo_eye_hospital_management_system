@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  AppBar,
-  Toolbar,
-  Typography,
   Button,
   Container,
   Grid,
   Card,
   CardContent,
-  CardActions,
   List,
   ListItem,
   ListItemText,
@@ -25,16 +21,14 @@ import {
   Select,
   MenuItem,
   Paper,
+  Typography,
   Typography as MuiTypography,
   Divider,
   Tooltip
 } from '@mui/material';
 import {
-  ArrowBack,
   Refresh,
   PlayArrow,
-  Pause,
-  LocalHospital,
   Visibility,
   PersonAdd,
   CheckCircle,
@@ -44,14 +38,16 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { useOPD } from '../contexts/OPDContext';
 import axios from 'axios';
+import Navbar from './Navbar';
 
 const OPDManagement = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { joinOPD, leaveOPD, onQueueUpdate, removeAllListeners } = useSocket();
-  const { showSuccess, showError, showWarning } = useNotification();
-  const [selectedOpd, setSelectedOpd] = useState('opd1');
+  const { showSuccess, showError } = useNotification();
+  const { activeOPDs, getOPDByCode } = useOPD();
+  const [selectedOpd, setSelectedOpd] = useState('');
   const [queue, setQueue] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -61,11 +57,12 @@ const OPDManagement = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [endVisitDialogOpen, setEndVisitDialogOpen] = useState(false);
 
-  const opdTypes = [
-    { value: 'opd1', label: 'OPD 1' },
-    { value: 'opd2', label: 'OPD 2' },
-    { value: 'opd3', label: 'OPD 3' },
-  ];
+  // Set default OPD when activeOPDs are loaded
+  useEffect(() => {
+    if (activeOPDs.length > 0 && !selectedOpd) {
+      setSelectedOpd(activeOPDs[0].opd_code);
+    }
+  }, [activeOPDs, selectedOpd]);
 
   useEffect(() => {
     fetchQueueData();
@@ -181,7 +178,7 @@ const OPDManagement = () => {
     if (!selectedPatient || !selectedOpd) return;
       console.log(`\n\nPatient not here:`, selectedPatient);
     try {
-      const response = await axios.post(`http://localhost:8000/api/patients/${selectedPatient.patient_id}/endvisit`);
+      await axios.post(`http://localhost:8000/api/patients/${selectedPatient.patient_id}/endvisit`);
 
       showSuccess(`Patient ${selectedPatient.token_number} visit completed`);
       setEndVisitDialogOpen(false);
@@ -269,24 +266,14 @@ const OPDManagement = () => {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static">
-        <Toolbar>
-          <IconButton
-            edge="start"
-            color="inherit"
-            onClick={() => navigate('/dashboard')}
-            sx={{ mr: 2 }}
-          >
-            <ArrowBack />
-          </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            OPD Management - {selectedOpd.toUpperCase()}
-          </Typography>
-          <Button color="inherit" onClick={fetchQueueData} startIcon={<Refresh />}>
-            Refresh
-          </Button>
-        </Toolbar>
-      </AppBar>
+      <Navbar 
+        onRefresh={() => {
+          fetchQueueData();
+          fetchStats();
+          fetchReferred();
+        }} 
+        pageTitle={`OPD Management - ${getOPDByCode(selectedOpd)?.opd_name || selectedOpd.toUpperCase()}`}
+      />
 
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         {/* OPD Selection */}
@@ -304,9 +291,9 @@ const OPDManagement = () => {
                     onChange={(e) => setSelectedOpd(e.target.value)}
                     label="OPD"
                   >
-                    {opdTypes.map((opd) => (
-                      <MenuItem key={opd.value} value={opd.value}>
-                        {opd.label}
+                    {activeOPDs.map((opd) => (
+                      <MenuItem key={opd.opd_code} value={opd.opd_code}>
+                        {opd.opd_name}
                       </MenuItem>
                     ))}
                   </Select>
@@ -567,9 +554,9 @@ const OPDManagement = () => {
                   onChange={(e) => setActionDialog(prev => ({ ...prev, targetOpd: e.target.value }))}
                   label="Refer to OPD"
                 >
-                  {opdTypes.filter(opd => opd.value !== selectedOpd).map((opd) => (
-                    <MenuItem key={opd.value} value={opd.value}>
-                      {opd.label}
+                  {activeOPDs.filter(opd => opd.opd_code !== selectedOpd).map((opd) => (
+                    <MenuItem key={opd.opd_code} value={opd.opd_code}>
+                      {opd.opd_name}
                     </MenuItem>
                   ))}
                 </Select>

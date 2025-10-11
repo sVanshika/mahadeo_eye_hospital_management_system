@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  AppBar,
-  Toolbar,
-  Typography,
   Button,
   Container,
   Grid,
@@ -31,25 +28,25 @@ import {
   Chip,
   Alert,
   Typography as MuiTypography,
+  Typography,
 } from '@mui/material';
 import {
-  ArrowBack,
-  Refresh,
   Add,
   Edit,
   Delete,
-  Visibility,
+  CheckCircle,
   PersonAdd,
   Room,
   Assessment,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useOPD } from '../contexts/OPDContext';
 import axios from 'axios';
+import Navbar from './Navbar';
 
 const AdminPanel = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { opds, createOPD, updateOPD, deleteOPD, activateOPD } = useOPD();
   const [tabValue, setTabValue] = useState(0);
   const [dashboardStats, setDashboardStats] = useState(null);
   const [users, setUsers] = useState([]);
@@ -66,8 +63,9 @@ const AdminPanel = () => {
   useEffect(() => {
     fetchDashboardStats();
     if (tabValue === 0) fetchUsers();
-    if (tabValue === 1) fetchRooms();
-    if (tabValue === 2) fetchPatientFlows();
+    if (tabValue === 1) ; // OPDs are managed by context
+    if (tabValue === 2) fetchRooms();
+    if (tabValue === 3) fetchPatientFlows();
   }, [tabValue]);
 
   const fetchDashboardStats = async () => {
@@ -157,6 +155,26 @@ const AdminPanel = () => {
           setSuccess('Room created successfully');
         }
         fetchRooms();
+      } else if (dialogType === 'opd') {
+        if (selectedItem) {
+          // Update OPD
+          const result = await updateOPD(selectedItem.id, formData);
+          if (result.success) {
+            setSuccess('OPD updated successfully');
+          } else {
+            setError(result.error);
+            return;
+          }
+        } else {
+          // Create OPD
+          const result = await createOPD(formData);
+          if (result.success) {
+            setSuccess('OPD created successfully');
+          } else {
+            setError(result.error);
+            return;
+          }
+        }
       }
       handleCloseDialog();
     } catch (error) {
@@ -199,24 +217,15 @@ const AdminPanel = () => {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static">
-        <Toolbar>
-          <IconButton
-            edge="start"
-            color="inherit"
-            onClick={() => navigate('/dashboard')}
-            sx={{ mr: 2 }}
-          >
-            <ArrowBack />
-          </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Admin Panel
-          </Typography>
-          <Button color="inherit" onClick={fetchDashboardStats} startIcon={<Refresh />}>
-            Refresh
-          </Button>
-        </Toolbar>
-      </AppBar>
+      <Navbar 
+        onRefresh={() => {
+          fetchDashboardStats();
+          if (tabValue === 0) fetchUsers();
+          if (tabValue === 1) fetchRooms();
+          if (tabValue === 2) fetchPatientFlows();
+        }} 
+        pageTitle="Admin Panel"
+      />
 
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
         {/* Alerts */}
@@ -289,6 +298,7 @@ const AdminPanel = () => {
         <Paper sx={{ width: '100%' }}>
           <Tabs value={tabValue} onChange={handleTabChange} aria-label="admin tabs">
             <Tab label="Users" icon={<PersonAdd />} />
+            <Tab label="OPDs" icon={<Room />} />
             <Tab label="Rooms" icon={<Room />} />
             <Tab label="Patient Flows" icon={<Assessment />} />
           </Tabs>
@@ -352,8 +362,78 @@ const AdminPanel = () => {
             </Box>
           )}
 
-          {/* Rooms Tab */}
+          {/* OPDs Tab */}
           {tabValue === 1 && (
+            <Box sx={{ p: 3 }}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h6">OPD Management</Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => handleOpenDialog('opd')}
+                >
+                  Add OPD
+                </Button>
+              </Box>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>OPD Code</TableCell>
+                      <TableCell>OPD Name</TableCell>
+                      <TableCell>Description</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {opds.map((opd) => (
+                      <TableRow key={opd.id}>
+                        <TableCell>{opd.opd_code}</TableCell>
+                        <TableCell>{opd.opd_name}</TableCell>
+                        <TableCell>{opd.description || '-'}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={opd.is_active ? 'Active' : 'Inactive'}
+                            color={opd.is_active ? 'success' : 'error'}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenDialog('opd', opd)}
+                          >
+                            <Edit />
+                          </IconButton>
+                          {opd.is_active ? (
+                            <IconButton
+                              size="small"
+                              onClick={() => deleteOPD(opd.id)}
+                              color="error"
+                            >
+                              <Delete />
+                            </IconButton>
+                          ) : (
+                            <IconButton
+                              size="small"
+                              onClick={() => activateOPD(opd.id)}
+                              color="success"
+                            >
+                              <CheckCircle />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          )}
+
+          {/* Rooms Tab */}
+          {tabValue === 2 && (
             <Box sx={{ p: 3 }}>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h6">Room Management</Typography>
@@ -406,7 +486,7 @@ const AdminPanel = () => {
           )}
 
           {/* Patient Flows Tab */}
-          {tabValue === 2 && (
+          {tabValue === 3 && (
             <Box sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom>
                 Patient Flow History
@@ -455,6 +535,7 @@ const AdminPanel = () => {
         <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
           <DialogTitle>
             {dialogType === 'user' && (selectedItem ? 'Edit User' : 'Add User')}
+            {dialogType === 'opd' && (selectedItem ? 'Edit OPD' : 'Add OPD')}
             {dialogType === 'room' && (selectedItem ? 'Edit Room' : 'Add Room')}
           </DialogTitle>
           <DialogContent>
@@ -501,6 +582,53 @@ const AdminPanel = () => {
                     <MenuItem value="nursing">Nursing</MenuItem>
                   </Select>
                 </FormControl>
+              </>
+            )}
+            {dialogType === 'opd' && (
+              <>
+                <TextField
+                  margin="normal"
+                  required
+                  fullWidth
+                  label="OPD Code"
+                  name="opd_code"
+                  value={formData.opd_code || ''}
+                  onChange={handleInputChange}
+                  disabled={!!selectedItem} // Disable editing OPD code for existing OPDs
+                />
+                <TextField
+                  margin="normal"
+                  required
+                  fullWidth
+                  label="OPD Name"
+                  name="opd_name"
+                  value={formData.opd_name || ''}
+                  onChange={handleInputChange}
+                />
+                <TextField
+                  margin="normal"
+                  fullWidth
+                  label="Description"
+                  name="description"
+                  multiline
+                  rows={3}
+                  value={formData.description || ''}
+                  onChange={handleInputChange}
+                />
+                {selectedItem && (
+                  <FormControl fullWidth margin="normal">
+                    <InputLabel>Status</InputLabel>
+                    <Select
+                      name="is_active"
+                      value={formData.is_active !== undefined ? formData.is_active : true}
+                      onChange={handleInputChange}
+                      label="Status"
+                    >
+                      <MenuItem value={true}>Active</MenuItem>
+                      <MenuItem value={false}>Inactive</MenuItem>
+                    </Select>
+                  </FormControl>
+                )}
               </>
             )}
             {dialogType === 'room' && (

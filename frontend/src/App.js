@@ -4,6 +4,7 @@ import { Box } from '@mui/material';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { OPDProvider } from './contexts/OPDContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import PatientRegistration from './components/PatientRegistration';
@@ -17,8 +18,9 @@ function App() {
     <AuthProvider>
       <SocketProvider>
         <NotificationProvider>
-          <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <Routes>
+          <OPDProvider>
+            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+              <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/display" element={<DisplayScreen />} />
               <Route
@@ -54,8 +56,9 @@ function App() {
                 }
               />
               <Route path="/" element={<Navigate to="/login" replace />} />
-            </Routes>
-          </Box>
+              </Routes>
+            </Box>
+          </OPDProvider>
         </NotificationProvider>
       </SocketProvider>
     </AuthProvider>

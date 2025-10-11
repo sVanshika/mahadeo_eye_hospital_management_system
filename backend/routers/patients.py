@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, Patient, Queue, PatientStatus, OPDType, PatientFlow
+from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow
 from auth import get_current_active_user, User, require_role, UserRole
 from websocket_manager import broadcast_queue_update, broadcast_patient_status_update, broadcast_display_update
 import asyncio
@@ -22,7 +22,7 @@ class PatientUpdate(BaseModel):
     age: Optional[int] = None
     phone: Optional[str] = None
     current_status: Optional[PatientStatus] = None
-    allocated_opd: Optional[OPDType] = None
+    allocated_opd: Optional[str] = None
     current_room: Optional[str] = None
     is_dilated: Optional[bool] = None
     referred_from: Optional[str] = None
@@ -36,7 +36,7 @@ class PatientResponse(BaseModel):
     phone: Optional[str]
     registration_time: datetime
     current_status: PatientStatus
-    allocated_opd: Optional[OPDType]
+    allocated_opd: Optional[str]
     current_room: Optional[str]
     is_dilated: bool
     dilation_time: Optional[datetime]
@@ -60,10 +60,10 @@ class QueueResponse(BaseModel):
     class Config:
         from_attributes = True
 class AllocateOPDRequest(BaseModel):
-    opd_type: OPDType
+    opd_type: str
 
 class ReferPatientRequest(BaseModel):
-    to_opd: OPDType
+    to_opd: str
 
 class ReferredPatientResponse(BaseModel):
     id: int
@@ -136,7 +136,8 @@ async def list_referred_patients(
 ):
     query = db.query(Patient).filter(Patient.current_status == PatientStatus.REFERRED)
 
-    valid_opds = {opd.value for opd in OPDType}
+    # Get valid OPD codes from database
+    valid_opds = {opd.opd_code for opd in db.query(OPD).filter(OPD.is_active == True).all()}
     if from_opd and from_opd in valid_opds:
         query = query.filter(Patient.referred_from == from_opd)
     if to_opd and to_opd in valid_opds:
@@ -165,13 +166,19 @@ async def allocate_opd(
 ):
     print("patients.py: allocate_opd")
     opd_type = payload.opd_type
+    
+    # Validate OPD exists and is active
+    opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
+    if not opd:
+        raise HTTPException(status_code=404, detail="OPD not found or inactive")
+    
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
     # Update patient OPD allocation
     patient.allocated_opd = opd_type
-    patient.current_room = f"opd_{opd_type.value}"
+    patient.current_room = f"opd_{opd_type}"
     
     # Add to OPD queue
     max_position = db.query(func.max(Queue.position)).filter(
@@ -192,7 +199,7 @@ async def allocate_opd(
     flow_entry = PatientFlow(
         patient_id=patient_id,
         from_room="registration",
-        to_room=f"opd_{opd_type.value}",
+        to_room=f"opd_{opd_type}",
         status=PatientStatus.PENDING
     )
     db.add(flow_entry)
@@ -278,13 +285,19 @@ async def refer_patient(
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
     to_opd = payload.to_opd
+    
+    # Validate target OPD exists and is active
+    target_opd = db.query(OPD).filter(OPD.opd_code == to_opd, OPD.is_active == True).first()
+    if not target_opd:
+        raise HTTPException(status_code=404, detail="Target OPD not found or inactive")
+    
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
     from_opd = patient.allocated_opd
-    patient.referred_from = from_opd.value if from_opd else None
-    patient.referred_to = to_opd.value
+    patient.referred_from = from_opd if from_opd else None
+    patient.referred_to = to_opd
     patient.current_status = PatientStatus.REFERRED
 
     # Keep patient in current OPD queue but mark their queue status as REFERRED
@@ -320,10 +333,10 @@ async def refer_patient(
     # Log patient flow
     flow_entry = PatientFlow(
         patient_id=patient_id,
-        from_room=f"opd_{from_opd.value}" if from_opd else None,
-        to_room=f"opd_{to_opd.value}",
+        from_room=f"opd_{from_opd}" if from_opd else None,
+        to_room=f"opd_{to_opd}",
         status=PatientStatus.REFERRED,
-        notes=f"Referred from {from_opd.value if from_opd else 'registration'} to {to_opd.value}"
+        notes=f"Referred from {from_opd if from_opd else 'registration'} to {to_opd}"
     )
     db.add(flow_entry)
     db.commit()
@@ -335,7 +348,7 @@ async def refer_patient(
     await broadcast_patient_status_update(patient_id, PatientStatus.REFERRED, db)
     await broadcast_display_update()
 
-    return {"message": f"Patient referred to {to_opd.value} and present in both queues as referred"}
+    return {"message": f"Patient referred to {to_opd} and present in both queues as referred"}
 
 
 
@@ -354,7 +367,8 @@ async def list_referred_patients(
     print(to_opd)
     query = db.query(Patient).filter(Patient.current_status == PatientStatus.REFERRED)
 
-    valid_opds = {opd.value for opd in OPDType}
+    # Get valid OPDs from database
+    valid_opds = {opd.opd_code for opd in db.query(OPD).filter(OPD.is_active == True).all()}
     if from_opd and from_opd in valid_opds:
         query = query.filter(Patient.referred_from == from_opd)
     if to_opd and to_opd in valid_opds:

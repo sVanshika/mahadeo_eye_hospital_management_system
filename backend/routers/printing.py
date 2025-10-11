@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional
-from database_sqlite import get_db, Patient, OPDType
+from database_sqlite import get_db, Patient, OPD
 from auth import get_current_active_user, User, require_role, UserRole
 from printing import printer_manager
 from pydantic import BaseModel

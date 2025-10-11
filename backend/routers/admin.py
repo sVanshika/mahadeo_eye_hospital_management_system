@@ -4,7 +4,7 @@ from sqlalchemy import func, desc
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, User, Room, Patient, Queue, PatientStatus, OPDType, PatientFlow, UserRole
+from database_sqlite import get_db, User, Room, Patient, Queue, PatientStatus, OPD, PatientFlow, UserRole
 from auth import get_current_active_user, User, require_role, UserCreate, UserResponse
 
 router = APIRouter()
@@ -195,7 +195,10 @@ async def get_dashboard_stats(
     
     # Get OPD-wise statistics
     opd_stats = []
-    for opd_type in OPDType:
+    # Get all active OPDs from database
+    active_opds = db.query(OPD).filter(OPD.is_active == True).all()
+    for opd in active_opds:
+        opd_type = opd.opd_code
         opd_patients = db.query(Patient).filter(Patient.allocated_opd == opd_type).count()
         opd_pending = db.query(Queue).filter(
             Queue.opd_type == opd_type,
@@ -233,7 +236,7 @@ async def get_patient_flows(
     skip: int = 0,
     limit: int = 100,
     patient_id: Optional[int] = None,
-    opd_type: Optional[OPDType] = None,
+    opd_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
@@ -302,7 +305,10 @@ async def get_daily_report(
     
     # OPD-wise breakdown
     opd_breakdown = {}
-    for opd_type in OPDType:
+    # Get all active OPDs from database
+    active_opds = db.query(OPD).filter(OPD.is_active == True).all()
+    for opd in active_opds:
+        opd_type = opd.opd_code
         opd_patients = [p for p in patients if p.allocated_opd == opd_type]
         opd_breakdown[opd_type.value] = {
             "total": len(opd_patients),
