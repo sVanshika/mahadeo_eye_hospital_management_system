@@ -102,14 +102,14 @@ async def call_next_patient(
     # Update patient status to IN_OPD
     next_patient.status = PatientStatus.IN_OPD
     next_patient.patient.current_status = PatientStatus.IN_OPD
-    next_patient.patient.current_room = f"opd_{opd_type.value}"
+    next_patient.patient.current_room = f"opd_{opd_type}"
     next_patient.updated_at = datetime.utcnow()
     
     # Log patient flow
     flow_entry = PatientFlow(
         patient_id=next_patient.patient_id,
         from_room="waiting_area",
-        to_room=f"opd_{opd_type.value}",
+        to_room=f"opd_{opd_type}",
         status=PatientStatus.IN_OPD
     )
     db.add(flow_entry)
@@ -162,7 +162,7 @@ async def dilate_patient(
     # Log patient flow
     flow_entry = PatientFlow(
         patient_id=patient_id,
-        from_room=f"opd_{opd_type.value}",
+        from_room=f"opd_{opd_type}",
         to_room="dilation_area",
         status=PatientStatus.DILATED,
         notes="Patient given dilation drops, waiting 30-40 minutes"
@@ -203,7 +203,7 @@ async def return_dilated_patient(
     
     # Update patient status back to IN_OPD
     patient.current_status = PatientStatus.IN_OPD
-    patient.current_room = f"opd_{opd_type.value}"
+    patient.current_room = f"opd_{opd_type}"
     
     # Update queue status
     queue_entry = db.query(Queue).filter(
@@ -219,7 +219,7 @@ async def return_dilated_patient(
     flow_entry = PatientFlow(
         patient_id=patient_id,
         from_room="dilation_area",
-        to_room=f"opd_{opd_type.value}",
+        to_room=f"opd_{opd_type}",
         status=PatientStatus.IN_OPD,
         notes="Patient returned from dilation"
     )

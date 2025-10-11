@@ -59,34 +59,45 @@ const OPDManagement = () => {
 
   // Set default OPD when activeOPDs are loaded
   useEffect(() => {
+    console.log('activeOPDs changed:', activeOPDs);
+    console.log('selectedOpd:', selectedOpd);
     if (activeOPDs.length > 0 && !selectedOpd) {
+      console.log('Setting default OPD to:', activeOPDs[0].opd_code);
       setSelectedOpd(activeOPDs[0].opd_code);
     }
   }, [activeOPDs, selectedOpd]);
 
   useEffect(() => {
-    fetchQueueData();
-    fetchStats();
-    fetchReferred();
-    
-    // Join OPD room for real-time updates
-    joinOPD(selectedOpd);
-    
-    // Set up socket listeners
-    onQueueUpdate((data) => {
-      if (data.opd_type === selectedOpd) {
-        setQueue(data.queue);
-      }
-    });
+    // Only make API calls if selectedOpd is available
+    if (selectedOpd) {
+      fetchQueueData();
+      fetchStats();
+      fetchReferred();
+      
+      // Join OPD room for real-time updates
+      joinOPD(selectedOpd);
+      
+      // Set up socket listeners
+      onQueueUpdate((data) => {
+        if (data.opd_type === selectedOpd) {
+          setQueue(data.queue);
+        }
+      });
 
-    return () => {
-      leaveOPD(selectedOpd);
-      removeAllListeners();
-    };
+      return () => {
+        leaveOPD(selectedOpd);
+        removeAllListeners();
+      };
+    }
   }, [selectedOpd]);
 
   const fetchQueueData = async () => {
+    if (!selectedOpd) {
+      console.log('No selectedOpd, skipping fetchQueueData');
+      return;
+    }
     try {
+      console.log(`Fetching queue data for OPD: ${selectedOpd}`);
       const response = await axios.get(`http://localhost:8000/api/opd/${selectedOpd}/queue`);
       setQueue(response.data);
       console.log(`\n\nQueue data:`, response.data);
@@ -96,7 +107,12 @@ const OPDManagement = () => {
   };
 
   const fetchStats = async () => {
+    if (!selectedOpd) {
+      console.log('No selectedOpd, skipping fetchStats');
+      return;
+    }
     try {
+      console.log(`Fetching stats for OPD: ${selectedOpd}`);
       const response = await axios.get(`http://localhost:8000/api/opd/${selectedOpd}/stats`);
       setStats(response.data);
       console.log(`\n\nStats data:`, response.data);
@@ -106,6 +122,10 @@ const OPDManagement = () => {
   };
 
   const fetchReferred = async () => {
+    if (!selectedOpd) {
+      console.log('No selectedOpd, skipping fetchReferred');
+      return;
+    }
     try {
       console.log(`\n\nFetching referred patients from ${selectedOpd}`);
       console.log(`\n\nFetching referred patients to ${selectedOpd}`);

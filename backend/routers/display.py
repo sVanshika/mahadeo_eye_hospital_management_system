@@ -195,14 +195,14 @@ async def get_waiting_list(
             "token_number": entry.patient.token_number,
             "patient_name": entry.patient.name,
             "age": entry.patient.age,
-            "status": entry.status.value,
+            "status": entry.status,
             "waiting_time_minutes": waiting_time,
             "is_dilated": entry.patient.is_dilated,
             "registration_time": entry.patient.registration_time.isoformat()
         })
     
     return {
-        "opd_type": opd_type.value,
+        "opd_type": opd_type,
         "waiting_list": waiting_list,
         "total_waiting": len(waiting_list)
     }
@@ -254,7 +254,7 @@ async def get_display_overview(
             Queue.status == PatientStatus.DILATED
         ).count()
         
-        opd_counts[opd_type.value] = {
+        opd_counts[opd_type] = {
             "pending": opd_pending,
             "in_progress": opd_in_progress,
             "dilated": opd_dilated,

@@ -26,7 +26,7 @@ async def print_token(
     success = printer_manager.print_token(
         token_number=patient.token_number,
         patient_name=patient.name,
-        opd_number=patient.allocated_opd.value if patient.allocated_opd else None
+        opd_number=patient.allocated_opd if patient.allocated_opd else None
     )
     
     if not success:
@@ -58,7 +58,7 @@ async def print_opd_slip(
     success = printer_manager.print_opd_slip(
         token_number=patient.token_number,
         patient_name=patient.name,
-        opd_number=patient.allocated_opd.value,
+        opd_number=patient.allocated_opd,
         registration_time=patient.registration_time.strftime("%Y-%m-%d %H:%M:%S"),
         estimated_wait=estimated_wait
     )

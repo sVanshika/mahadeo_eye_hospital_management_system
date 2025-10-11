@@ -31,6 +31,19 @@ class OPDResponse(BaseModel):
     class Config:
         from_attributes = True
 
+@router.get("/public", response_model=List[OPDResponse])
+async def get_public_opds(
+    active_only: bool = True,
+    db: Session = Depends(get_db)
+):
+    """Get OPDs without authentication - for public use"""
+    query = db.query(OPD)
+    if active_only:
+        query = query.filter(OPD.is_active == True)
+    
+    opds = query.all()
+    return opds
+
 @router.get("/", response_model=List[OPDResponse])
 async def get_opds(
     active_only: bool = True,

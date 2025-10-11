@@ -209,7 +209,7 @@ async def allocate_opd(
     await broadcast_queue_update(opd_type, db)
     await broadcast_display_update()
     
-    return {"message": f"Patient allocated to {opd_type.value}", "queue_position": max_position + 1}
+    return {"message": f"Patient allocated to {opd_type}", "queue_position": max_position + 1}
 
 @router.get("/{patient_id}", response_model=PatientResponse)
 async def get_patient(

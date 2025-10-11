@@ -214,7 +214,7 @@ async def get_dashboard_stats(
         ).count()
         
         opd_stats.append({
-            "opd_type": opd_type.value,
+            "opd_type": opd_type,
             "total_patients": opd_patients,
             "pending": opd_pending,
             "in_progress": opd_in_progress,
@@ -310,7 +310,7 @@ async def get_daily_report(
     for opd in active_opds:
         opd_type = opd.opd_code
         opd_patients = [p for p in patients if p.allocated_opd == opd_type]
-        opd_breakdown[opd_type.value] = {
+        opd_breakdown[opd_type] = {
             "total": len(opd_patients),
             "completed": len([p for p in opd_patients if p.current_status == PatientStatus.COMPLETED]),
             "pending": len([p for p in opd_patients if p.current_status == PatientStatus.PENDING]),

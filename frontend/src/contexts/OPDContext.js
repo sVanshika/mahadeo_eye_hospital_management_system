@@ -19,7 +19,9 @@ export const OPDProvider = ({ children }) => {
   const fetchOPDs = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:8000/api/opd-management/');
+      console.log('Fetching OPDs from backend...');
+      const response = await axios.get('http://localhost:8000/api/opd-management/public');
+      console.log('OPDs fetched:', response.data);
       setOpds(response.data);
       setError(null);
     } catch (err) {
