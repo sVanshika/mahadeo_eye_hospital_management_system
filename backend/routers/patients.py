@@ -399,13 +399,14 @@ async def get_patients(
         # If 'latest' is true, order by registration time descending and limit to 5
         patients = query.order_by(Patient.registration_time.desc()).limit(5).all()
         print("Fetching latest 5 patients.")
+        for patient in patients:
+            print(patient.name, "\t", patient.registration_time, "\t", patient.current_status, "\t", patient.allocated_opd)
     else:
         # Otherwise, apply skip and limit for general pagination
         patients = query.order_by(Patient.registration_time.desc()).offset(skip).limit(limit).all()
         print(f"Fetching patients with skip={skip}, limit={limit}.")
     
-    for patient in patients:
-        print(patient.name, patient.registration_time)
+    
     return patients
 
 

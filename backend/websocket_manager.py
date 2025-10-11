@@ -42,6 +42,7 @@ async def broadcast_queue_update(opd_type: OPDType, db: Session):
     
     queue_data = []
     for entry in queue_entries:
+        print(f"entry - name: {entry.patient.name} \t status: {entry.status}")
         queue_data.append({
             "id": entry.id,
             "patient_id": entry.patient_id,

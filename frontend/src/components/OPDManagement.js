@@ -58,6 +58,8 @@ const OPDManagement = () => {
   const [actionDialog, setActionDialog] = useState({ open: false, type: '', patient: null });
   const [referredFromHere, setReferredFromHere] = useState([]); // referred from selectedOpd to elsewhere
   const [referredToHere, setReferredToHere] = useState([]);     // referred from elsewhere to selectedOpd
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [endVisitDialogOpen, setEndVisitDialogOpen] = useState(false);
 
   const opdTypes = [
     { value: 'opd1', label: 'OPD 1' },
@@ -162,13 +164,36 @@ const OPDManagement = () => {
 
   const handleEndVisit = (patient) => {
     console.log(`\n\nEnding visit for patient ${patient.token_number}`);
-    setActionDialog({
-      open: true,
-      type: 'end_visit',
-      patient: patient,
-      title: 'Confirm End Visit',
-      message: `Are you sure you want to end the visit for patient ${patient.token_number} (${patient.patient_name})? This will mark their visit as completed.`,
-    });
+    setSelectedPatient(patient);
+    setEndVisitDialogOpen(true);
+    // setActionDialog({
+    //   open: true,
+    //   type: 'end_visit',
+    //   patient: patient,
+    //   title: 'Confirm End Visit',
+    //   message: `Are you sure you want to end the visit for patient ${patient.token_number} (${patient.patient_name})? This will mark their visit as completed.`,
+    // });
+  };
+
+  const confirmEndVisit = async () => {
+    console.log(`\n\nEnding visit for patient ${selectedPatient.token_number}`);
+  
+    if (!selectedPatient || !selectedOpd) return;
+      console.log(`\n\nPatient not here:`, selectedPatient);
+    try {
+      const response = await axios.post(`http://localhost:8000/api/patients/${selectedPatient.patient_id}/endvisit`);
+
+      showSuccess(`Patient ${selectedPatient.token_number} visit completed`);
+      setEndVisitDialogOpen(false);
+      setSelectedPatient(null);
+
+      
+
+      fetchQueueData();
+
+    } catch (error) {
+      showError(error.response?.data?.detail || 'OPD allocation failed');
+    }
   };
 
 
@@ -576,6 +601,23 @@ const OPDManagement = () => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <Dialog open={endVisitDialogOpen} onClose={() => setEndVisitDialogOpen(false)}>
+          <DialogTitle>End Visit</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              Are you sure you want to end visit for - Patient: {selectedPatient?.name} ({selectedPatient?.token_number})
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEndVisitDialogOpen(false)}>Cancel</Button>
+            <Button onClick={confirmEndVisit} variant="contained" color="error">
+              End Visit
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+
       </Container>
     </Box>
   );

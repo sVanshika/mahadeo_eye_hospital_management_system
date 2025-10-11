@@ -25,6 +25,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Tooltip
 } from '@mui/material';
 import {
   ArrowBack,
@@ -247,20 +248,31 @@ const PatientRegistration = () => {
                         secondary={`Age: ${patient.age} | Status: ${getStatusLabel(patient.current_status)}`}
                       />
                       <ListItemSecondaryAction>
-                        <Chip
-                          label={getStatusLabel(patient.current_status)}
-                          color={getStatusColor(patient.current_status)}
-                          size="small"
-                        />
-                        {!patient.allocated_opd && (
-                          <IconButton
-                            edge="end"
-                            onClick={() => handleAllocateOpd(patient)}
-                            color="primary"
-                          >
-                            <PersonAdd />
-                          </IconButton>
-                        )}
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Chip
+                            label={getStatusLabel(patient.current_status)}
+                            color={getStatusColor(patient.current_status)}
+                            size="small"
+                          />
+                              {patient.allocated_opd && (
+                                <Chip
+                                  label={patient.allocated_opd.toUpperCase()}
+                                  color="primary"
+                                  size="small"
+                                />
+                              )}
+                              {!patient.allocated_opd && patient.current_status != 'completed' && (
+                                <Tooltip title="Allocate OPD" enterDelay={0} leaveDelay={0}>
+                                  <IconButton
+                                    edge="end"
+                                    onClick={() => handleAllocateOpd(patient)}
+                                    color="primary"
+                                  >
+                                    <PersonAdd />
+                                  </IconButton>
+                                </Tooltip>
+                          )}
+                        </Box>
                       </ListItemSecondaryAction>
                     </ListItem>
                   ))}
@@ -297,14 +309,16 @@ const PatientRegistration = () => {
                                   size="small"
                                 />
                               )}
-                              {!patient.allocated_opd && (
-                                <IconButton
-                                  edge="end"
-                                  onClick={() => handleAllocateOpd(patient)}
-                                  color="primary"
-                                >
-                                  <PersonAdd />
-                                </IconButton>
+                              {!patient.allocated_opd && patient.current_status != 'completed' && (
+                                <Tooltip title="Allocate OPD" enterDelay={0} leaveDelay={0}>
+                                  <IconButton
+                                    edge="end"
+                                    onClick={() => handleAllocateOpd(patient)}
+                                    color="primary"
+                                  >
+                                    <PersonAdd />
+                                  </IconButton>
+                                </Tooltip>
                           )}
                         </Box>
                       </ListItemSecondaryAction>
