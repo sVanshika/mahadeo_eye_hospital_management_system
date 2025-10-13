@@ -64,6 +64,7 @@ class AllocateOPDRequest(BaseModel):
 
 class ReferPatientRequest(BaseModel):
     to_opd: str
+    remarks: str
 
 class ReferredPatientResponse(BaseModel):
     id: int
@@ -73,6 +74,8 @@ class ReferredPatientResponse(BaseModel):
     registration_time: datetime
     from_opd: Optional[str]
     to_opd: Optional[str]
+    status: str
+    current_queue_status: Optional[str] = None  # Shows current status in the destination OPD queue
 
     class Config:
         from_attributes = True
@@ -89,7 +92,7 @@ def generate_token_number(db: Session) -> str:
         last_number = int(last_token.token_number.split('-')[-1])
         new_number = last_number + 1
     else:
-        new_number = 1
+        new_number = 1001
     
     return f"{today}-{new_number:04d}"
 
@@ -145,8 +148,19 @@ async def list_referred_patients(
 
     patients = query.order_by(Patient.registration_time.asc()).all()
 
-    return [
-        ReferredPatientResponse(
+    result = []
+    for p in patients:
+        # Get current queue status in the destination OPD
+        current_queue_status = None
+        if p.referred_to:
+            queue_entry = db.query(Queue).filter(
+                Queue.patient_id == p.id,
+                Queue.opd_type == p.referred_to
+            ).first()
+            if queue_entry:
+                current_queue_status = queue_entry.status.value
+
+        result.append(ReferredPatientResponse(
             id=p.id,
             token_number=p.token_number,
             name=p.name,
@@ -154,8 +168,11 @@ async def list_referred_patients(
             registration_time=p.registration_time,
             from_opd=p.referred_from,
             to_opd=p.referred_to,
-        ) for p in patients
-    ]
+            status=p.current_status.value,
+            current_queue_status=current_queue_status
+        ))
+    
+    return result
 
 @router.post("/{patient_id}/allocate-opd")
 async def allocate_opd(
@@ -285,6 +302,7 @@ async def refer_patient(
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
     to_opd = payload.to_opd
+    remarks = payload.remarks
     
     # Validate target OPD exists and is active
     target_opd = db.query(OPD).filter(OPD.opd_code == to_opd, OPD.is_active == True).first()
@@ -336,7 +354,7 @@ async def refer_patient(
         from_room=f"opd_{from_opd}" if from_opd else None,
         to_room=f"opd_{to_opd}",
         status=PatientStatus.REFERRED,
-        notes=f"Referred from {from_opd if from_opd else 'registration'} to {to_opd}"
+        notes=remarks
     )
     db.add(flow_entry)
     db.commit()
@@ -477,3 +495,32 @@ async def end_patient_visit(
     await broadcast_display_update()
 
     return {"message": f"Patient {patient.token_number} visit completed."}
+
+@router.post("/{patient_id}/delete")
+async def delete_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    opd_to_update = patient.allocated_opd # Store for broadcasting before deletion
+
+    # Delete associated queue entries
+    db.query(Queue).filter(Queue.patient_id == patient_id).delete(synchronize_session=False)
+
+    # Delete associated patient flow entries
+    db.query(PatientFlow).filter(PatientFlow.patient_id == patient_id).delete(synchronize_session=False)
+
+    # Delete the patient record
+    db.delete(patient)
+    db.commit()
+
+    # Broadcast updates if the patient was in an active OPD queue
+    if opd_to_update:
+        await broadcast_queue_update(opd_to_update, db)
+    await broadcast_display_update() # General display update
+
+    return {"message": f"Patient {patient.token_number} and all associated records deleted successfully."}

@@ -18,6 +18,7 @@ import {
   DialogActions,
   FormControl,
   InputLabel,
+  TextField,
   Select,
   MenuItem,
   Paper,
@@ -224,8 +225,10 @@ const OPDManagement = () => {
         showSuccess(`Patient ${patient.token_number} marked for dilation`);
       } else if (type === 'refer') {
         const targetOpd = actionDialog.targetOpd;
+        const remarks = actionDialog.remarks
         await axios.post(`http://localhost:8000/api/patients/${patient.patient_id}/refer`, {
           to_opd: targetOpd,
+          remarks: remarks
         });
         showSuccess(`Patient ${patient.token_number} referred to ${targetOpd.toUpperCase()}`);
       } else if (type === 'return_dilated') {
@@ -394,7 +397,7 @@ const OPDManagement = () => {
                     <React.Fragment key={patient.id}>
                       <ListItem>
                         <ListItemText
-                          primary={`${patient.position}. ${patient.token_number} - ${patient.patient_name}`}
+                          primary={`${patient.position}. ${patient.token_number.split("-")[1]} - ${patient.patient_name}`}
                           secondary={`Age: ${patient.age} | Waiting: ${formatWaitingTime(patient.registration_time)}`}
                         />
                         <ListItemSecondaryAction>
@@ -404,7 +407,23 @@ const OPDManagement = () => {
                               color={getStatusColor(patient.status)}
                               size="small"
                             />
-                            {patient.is_dilated && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleDilatePatient(patient)}
+                                disabled={patient.status !== 'in'}
+                            >
+                              Dilate  
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleReferPatient(patient)}
+                                disabled={patient.status !== 'in'}
+                            >
+                              Refer
+                            </Button>
+                            {/* {patient.is_dilated && (
                               <Chip
                                 label="Dilated"
                                 color="secondary"
@@ -437,18 +456,17 @@ const OPDManagement = () => {
                               >
                                 <PersonAdd />
                               </IconButton>
-                            )}
+                            )} */}
                             { (
-                              <Tooltip title="End Visit" enterDelay={0} leaveDelay={0}>
-                              <IconButton
+                              <Button
+                                variant='contained'
                                 size="small"
                                 onClick={() => handleEndVisit(patient)}
-                                color="success"
+                                color="error"
                                 tooltip="End Visit"
                               >
-                                <CheckCircle /> {/* Assuming DoneAll icon is available or will be imported */}
-                              </IconButton>
-                              </Tooltip>
+                                End Visit {/* Assuming DoneAll icon is available or will be imported */}
+                              </Button>
                             )}
                           </Box>
                         </ListItemSecondaryAction>
@@ -513,11 +531,16 @@ const OPDManagement = () => {
                     {referredFromHere.map((p) => (
                       <ListItem key={`from-${p.id}`} divider>
                         <ListItemText
-                          primary={`${p.token_number} - ${p.name}`}
+                          primary={`${p.token_number.split("-")[1]} - ${p.name}`}
                           secondary={`To: ${p.to_opd?.toUpperCase()} | Registered: ${new Date(p.registration_time).toLocaleString()}`}
                         />
                         <ListItemSecondaryAction>
-                          <Chip label="Referred" color="error" size="small" />
+                          {/* <Chip label="Referred" color="error" size="small" /> */}
+                          <Chip
+                              label={getStatusLabel(p.status)}
+                              color={getStatusColor(p.status)}
+                              size="small"
+                            />
                         </ListItemSecondaryAction>
                       </ListItem>
                     ))}
@@ -536,11 +559,16 @@ const OPDManagement = () => {
                     {referredToHere.map((p) => (
                       <ListItem key={`to-${p.id}`} divider>
                         <ListItemText
-                          primary={`${p.token_number} - ${p.name}`}
+                          primary={`${p.token_number.split("-")[1]} - ${p.name}`}
                           secondary={`From: ${p.from_opd?.toUpperCase() || 'N/A'} | Registered: ${new Date(p.registration_time).toLocaleString()}`}
                         />
                         <ListItemSecondaryAction>
-                          <Chip label="Referred" color="error" size="small" />
+                          {/* <Chip label="Referred" color="error" size="small" /> */}
+                          <Chip
+                              label={getStatusLabel(p.status)}
+                              color={getStatusColor(p.status)}
+                              size="small"
+                            />
                         </ListItemSecondaryAction>
                       </ListItem>
                     ))}
@@ -553,7 +581,9 @@ const OPDManagement = () => {
       </Grid>
 
         {/* Action Dialog */}
-        <Dialog open={actionDialog.open} onClose={() => setActionDialog({ open: false, type: '', patient: null })}>
+        <Dialog open={actionDialog.open} 
+          onClose={() => setActionDialog({ open: false, type: '', patient: null })}
+          fullWidth>
           <DialogTitle>
             {actionDialog.type === 'dilate' && 'Dilate Patient'}
             {actionDialog.type === 'refer' && 'Refer Patient'}
@@ -580,6 +610,15 @@ const OPDManagement = () => {
                     </MenuItem>
                   ))}
                 </Select>
+              <TextField
+                  label="Remarks (Optional)"
+                  multiline
+                  rows={3}
+                  fullWidth
+                  sx={{ mt: 2 }}
+                  value={actionDialog.remarks || ''}
+                  onChange={(e) => setActionDialog(prev => ({ ...prev, remarks: e.target.value }))}
+                />
               </FormControl>
             )}
             

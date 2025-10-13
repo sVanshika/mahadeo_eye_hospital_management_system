@@ -51,6 +51,14 @@ async def get_opd_queue(
     queue_entries = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
         Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED])
+    ).filter(
+        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+        # Allow: fresh patients (no referral), patients referred TO this OPD, patients referred FROM this OPD back to this OPD
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
     ).order_by(Queue.position).all()
 
     print("**** get_opd_queue ****")
@@ -90,20 +98,30 @@ async def call_next_patient(
     if not opd:
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
     
-    # Get next patient in queue
+    # Get next patient in queue (including referred patients who can be called)
     next_patient = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status == PatientStatus.PENDING
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.REFERRED])
+    ).filter(
+        # Apply the same exclusion filter as in get_opd_queue
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
     ).order_by(Queue.position).first()
     
     if not next_patient:
         raise HTTPException(status_code=404, detail="No patients in queue")
     
-    # Update patient status to IN_OPD
+    # Update queue status to IN_OPD, but keep patient's overall status as REFERRED if they were referred
     next_patient.status = PatientStatus.IN_OPD
-    next_patient.patient.current_status = PatientStatus.IN_OPD
     next_patient.patient.current_room = f"opd_{opd_type}"
     next_patient.updated_at = datetime.utcnow()
+    
+    # Only update patient's current_status to IN_OPD if they're not a referred patient
+    if next_patient.patient.current_status != PatientStatus.REFERRED:
+        next_patient.patient.current_status = PatientStatus.IN_OPD
     
     # Log patient flow
     flow_entry = PatientFlow(
