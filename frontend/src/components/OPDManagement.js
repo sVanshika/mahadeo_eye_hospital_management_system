@@ -682,6 +682,9 @@ const OPDManagement = () => {
                   <Typography variant="subtitle1" gutterBottom>
                     Referred FROM this OPD
                   </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                    Hover over a patient to see their OPD chain history
+                  </Typography>
                   <List>
                     {referredFromHere.length === 0 && (
                       <ListItem>
@@ -689,18 +692,39 @@ const OPDManagement = () => {
                       </ListItem>
                     )}
                     {referredFromHere.map((p) => (
-                      <ListItem key={`from-${p.id}`} divider>
+                      <ListItem 
+                        key={`from-${p.id}`} 
+                        divider
+                        onMouseEnter={(e) => fetchPatientFlowHistory(p.id, e)}
+                        onMouseLeave={handleCloseFlowPopover}
+                        sx={{
+                          cursor: 'pointer',
+                          '&:hover': {
+                            bgcolor: 'action.hover',
+                          },
+                        }}
+                      >
                         <ListItemText
                           primary={`${p.token_number.split("-")[1]} - ${p.name}`}
                           secondary={`To: ${p.to_opd?.toUpperCase()} | Registered: ${new Date(p.registration_time).toLocaleString()}`}
                         />
                         <ListItemSecondaryAction>
-                          {/* <Chip label="Referred" color="error" size="small" /> */}
-                          <Chip
-                              label={getStatusLabel(p.current_queue_status)}
-                              color={getStatusColor(p.current_queue_status)}
-                              size="small"
-                            />
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Chip
+                                label={getStatusLabel(p.current_queue_status)}
+                                color={getStatusColor(p.current_queue_status)}
+                                size="small"
+                              />
+                            <Tooltip title="View OPD Chain History">
+                              <IconButton
+                                size="small"
+                                color="info"
+                                onClick={(e) => fetchPatientFlowHistory(p.id, e)}
+                              >
+                                <Timeline />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         </ListItemSecondaryAction>
                       </ListItem>
                     ))}
