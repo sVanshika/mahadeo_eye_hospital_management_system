@@ -1,2 +1,4 @@
 **/node_modules/
-**/myenv/
+**/myenv/backend/eye_hospital.db
+__pycache__/
+*.pyc
