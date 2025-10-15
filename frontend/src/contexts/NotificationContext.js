@@ -25,9 +25,32 @@ export const NotificationProvider = ({ children }) => {
   });
 
   const showNotification = useCallback((message, type = 'info', duration = 10000) => {
+    // Ensure message is always a string to prevent React rendering errors
+    let safeMessage = message;
+    
+    if (typeof message !== 'string') {
+      if (Array.isArray(message)) {
+        // Handle array of errors (e.g., validation errors)
+        safeMessage = message.map(err => {
+          if (typeof err === 'string') return err;
+          if (err.msg && err.loc) return `${err.loc.join('.')}: ${err.msg}`;
+          return JSON.stringify(err);
+        }).join(', ');
+      } else if (message && typeof message === 'object') {
+        // Handle object errors
+        try {
+          safeMessage = JSON.stringify(message);
+        } catch (e) {
+          safeMessage = 'An error occurred';
+        }
+      } else {
+        safeMessage = String(message);
+      }
+    }
+    
     setNotification({
       open: true,
-      message,
+      message: safeMessage,
       type,
       duration,
     });

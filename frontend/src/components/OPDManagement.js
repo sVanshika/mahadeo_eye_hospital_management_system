@@ -42,6 +42,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useOPD } from '../contexts/OPDContext';
 import axios from 'axios';
 import Navbar from './Navbar';
+import { parseErrorMessage } from '../utils/errorHelper';
 
 const OPDManagement = () => {
   const navigate = useNavigate();
@@ -154,7 +155,7 @@ const OPDManagement = () => {
       fetchStats();
       fetchReferred();
     } catch (error) {
-      showError(error.response?.data?.detail || 'Failed to call next patient');
+      showError(parseErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -214,7 +215,7 @@ const OPDManagement = () => {
       fetchQueueData();
 
     } catch (error) {
-      showError(error.response?.data?.detail || 'OPD allocation failed');
+      showError(parseErrorMessage(error));
     }
   };
 
@@ -249,7 +250,7 @@ const OPDManagement = () => {
       fetchStats();
       fetchReferred();
     } catch (error) {
-      showError(error.response?.data?.detail || 'Action failed');
+      showError(parseErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -314,7 +315,7 @@ const OPDManagement = () => {
       fetchQueueData(); // Refresh the queue
     } catch (error) {
       console.error('Error returning patient from referral:', error);
-      showError(error.response?.data?.detail || 'Failed to return patient from referral.');
+      showError(parseErrorMessage(error));
     } finally {
       setReturnLoading(false);
     }

@@ -33,6 +33,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useOPD } from '../contexts/OPDContext';
 import axios from 'axios';
 import Navbar from './Navbar';
+import { parseErrorMessage } from '../utils/errorHelper';
 
 const PatientRegistration = () => {
   const { showSuccess, showError } = useNotification();
@@ -89,7 +90,7 @@ const PatientRegistration = () => {
       setFormData({ name: '', age: '', phone: '' });
       fetchPatients();
     } catch (error) {
-      showError(error.response?.data?.detail || 'Registration failed');
+      showError(parseErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -116,7 +117,7 @@ const PatientRegistration = () => {
       setSelectedOpd('');
       fetchPatients();
     } catch (error) {
-      showError(error.response?.data?.detail || 'OPD allocation failed');
+      showError(parseErrorMessage(error));
     }
   };
 
