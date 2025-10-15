@@ -30,10 +30,17 @@ app = FastAPI(
 )
 
 # CORS middleware
+# FRONTEND_ORIGINS can be a comma-separated list, e.g. "https://your-frontend.com,https://staging-frontend.com"
+frontend_origins_env = os.getenv("FRONTEND_ORIGINS", "*")
+allowed_origins = [o.strip() for o in frontend_origins_env.split(",") if o.strip()]
+
+# If wildcard is used, we must not enable allow_credentials due to CORS spec
+allow_credentials = "*" not in allowed_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
