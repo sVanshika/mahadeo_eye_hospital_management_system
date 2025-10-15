@@ -342,3 +342,62 @@ async def get_all_opd_stats(
             continue
     
     return stats
+
+@router.post("/{opd_type}/call-out-of-queue/{patient_id}")
+async def call_patient_out_of_queue(
+    opd_type: str,
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.NURSING))
+):
+    """Call a specific patient out of their normal queue position, bypassing the sequential order"""
+    
+    # Validate OPD exists and is active
+    opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
+    if not opd:
+        raise HTTPException(status_code=404, detail="OPD not found or inactive")
+    
+    # Find the patient in the queue
+    queue_entry = db.query(Queue).join(Patient).filter(
+        Queue.opd_type == opd_type,
+        Queue.patient_id == patient_id,
+        Queue.status == PatientStatus.PENDING
+    ).first()
+    
+    if not queue_entry:
+        raise HTTPException(
+            status_code=404, 
+            detail="Patient not found in queue or already called"
+        )
+    
+    # Update patient status to IN_OPD
+    queue_entry.status = PatientStatus.IN_OPD
+    queue_entry.patient.current_status = PatientStatus.IN_OPD
+    queue_entry.patient.current_room = f"opd_{opd_type}"
+    queue_entry.updated_at = datetime.now()
+    
+    # Log patient flow
+    flow_entry = PatientFlow(
+        patient_id=patient_id,
+        from_room="waiting_area",
+        to_room=f"opd_{opd_type}",
+        status=PatientStatus.IN_OPD,
+        notes="Called out of queue (bypassed normal sequence)"
+    )
+    db.add(flow_entry)
+    db.commit()
+    
+    # Broadcast updates
+    await broadcast_queue_update(opd_type, db)
+    await broadcast_patient_status_update(patient_id, PatientStatus.IN_OPD, db)
+    await broadcast_display_update()
+    
+    return {
+        "message": f"Patient {queue_entry.patient.token_number} called out of queue",
+        "patient": {
+            "id": patient_id,
+            "token_number": queue_entry.patient.token_number,
+            "name": queue_entry.patient.name,
+            "position": queue_entry.position
+        }
+    }

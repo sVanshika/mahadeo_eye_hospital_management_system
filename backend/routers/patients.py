@@ -80,6 +80,18 @@ class ReferredPatientResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class PatientFlowResponse(BaseModel):
+    id: int
+    patient_id: int
+    from_room: Optional[str]
+    to_room: Optional[str]
+    status: str
+    timestamp: datetime
+    notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
 
 # Helper function to generate token number
 def generate_token_number(db: Session) -> str:
@@ -615,3 +627,33 @@ async def delete_patient(
     await broadcast_display_update() # General display update
 
     return {"message": f"Patient {patient.token_number} and all associated records deleted successfully."}
+
+@router.get("/{patient_id}/flow-history", response_model=List[PatientFlowResponse])
+async def get_patient_flow_history(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get the complete OPD chain/flow history for a patient showing their journey through different OPDs"""
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    flow_history = db.query(PatientFlow).filter(
+        PatientFlow.patient_id == patient_id
+    ).order_by(PatientFlow.timestamp.asc()).all()
+    
+    # Convert to response format
+    result = []
+    for flow in flow_history:
+        result.append(PatientFlowResponse(
+            id=flow.id,
+            patient_id=flow.patient_id,
+            from_room=flow.from_room,
+            to_room=flow.to_room,
+            status=flow.status.value if flow.status else "unknown",
+            timestamp=flow.timestamp,
+            notes=flow.notes
+        ))
+    
+    return result
