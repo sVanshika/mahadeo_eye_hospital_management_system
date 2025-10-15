@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../apiClient';
 
 const OPDContext = createContext();
 
@@ -20,7 +20,7 @@ export const OPDProvider = ({ children }) => {
     try {
       setLoading(true);
       console.log('Fetching OPDs from backend...');
-      const response = await axios.get('http://localhost:8000/api/opd-management/public');
+      const response = await apiClient.get('/opd-management/public');
       console.log('OPDs fetched:', response.data);
       setOpds(response.data);
       setError(null);
@@ -34,7 +34,7 @@ export const OPDProvider = ({ children }) => {
 
   const createOPD = async (opdData) => {
     try {
-      const response = await axios.post('http://localhost:8000/api/opd-management/', opdData);
+      const response = await apiClient.post('/opd-management/', opdData);
       setOpds(prev => [...prev, response.data]);
       return { success: true, data: response.data };
     } catch (err) {
@@ -48,7 +48,7 @@ export const OPDProvider = ({ children }) => {
 
   const updateOPD = async (opdId, opdData) => {
     try {
-      const response = await axios.put(`http://localhost:8000/api/opd-management/${opdId}`, opdData);
+      const response = await apiClient.put(`/opd-management/${opdId}`, opdData);
       setOpds(prev => prev.map(opd => opd.id === opdId ? response.data : opd));
       return { success: true, data: response.data };
     } catch (err) {
@@ -62,7 +62,7 @@ export const OPDProvider = ({ children }) => {
 
   const deleteOPD = async (opdId) => {
     try {
-      await axios.delete(`http://localhost:8000/api/opd-management/${opdId}`);
+      await apiClient.delete(`/opd-management/${opdId}`);
       setOpds(prev => prev.map(opd => 
         opd.id === opdId ? { ...opd, is_active: false } : opd
       ));
@@ -78,7 +78,7 @@ export const OPDProvider = ({ children }) => {
 
   const activateOPD = async (opdId) => {
     try {
-      await axios.post(`http://localhost:8000/api/opd-management/${opdId}/activate`);
+      await apiClient.post(`/opd-management/${opdId}/activate`);
       setOpds(prev => prev.map(opd => 
         opd.id === opdId ? { ...opd, is_active: true } : opd
       ));

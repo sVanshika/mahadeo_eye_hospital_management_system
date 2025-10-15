@@ -42,7 +42,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOPD } from '../contexts/OPDContext';
-import axios from 'axios';
+import apiClient from '../apiClient';
 import Navbar from './Navbar';
 
 const AdminPanel = () => {
@@ -70,7 +70,7 @@ const AdminPanel = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/admin/dashboard');
+      const response = await apiClient.get('/admin/dashboard');
       setDashboardStats(response.data);
     } catch (error) {
       console.error('Failed to fetch dashboard stats:', error);
@@ -79,7 +79,7 @@ const AdminPanel = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/admin/users');
+      const response = await apiClient.get('/admin/users');
       setUsers(response.data);
     } catch (error) {
       console.error('Failed to fetch users:', error);
@@ -88,7 +88,7 @@ const AdminPanel = () => {
 
   const fetchRooms = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/admin/rooms');
+      const response = await apiClient.get('/admin/rooms');
       setRooms(response.data);
     } catch (error) {
       console.error('Failed to fetch rooms:', error);
@@ -97,7 +97,7 @@ const AdminPanel = () => {
 
   const fetchPatientFlows = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/admin/patient-flows');
+      const response = await apiClient.get('/admin/patient-flows');
       setPatientFlows(response.data);
     } catch (error) {
       console.error('Failed to fetch patient flows:', error);
@@ -136,22 +136,22 @@ const AdminPanel = () => {
       if (dialogType === 'user') {
         if (selectedItem) {
           // Update user
-          await axios.put(`http://localhost:8000/api/admin/users/${selectedItem.id}`, formData);
+          await apiClient.put(`/admin/users/${selectedItem.id}`, formData);
           setSuccess('User updated successfully');
         } else {
           // Create user
-          await axios.post('http://localhost:8000/api/admin/users', formData);
+          await apiClient.post('/admin/users', formData);
           setSuccess('User created successfully');
         }
         fetchUsers();
       } else if (dialogType === 'room') {
         if (selectedItem) {
           // Update room
-          await axios.put(`http://localhost:8000/api/admin/rooms/${selectedItem.id}`, formData);
+          await apiClient.put(`/admin/rooms/${selectedItem.id}`, formData);
           setSuccess('Room updated successfully');
         } else {
           // Create room
-          await axios.post('http://localhost:8000/api/admin/rooms', formData);
+          await apiClient.post('/admin/rooms', formData);
           setSuccess('Room created successfully');
         }
         fetchRooms();

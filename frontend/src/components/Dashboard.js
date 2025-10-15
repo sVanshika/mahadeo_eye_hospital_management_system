@@ -19,7 +19,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../apiClient';
 import Navbar from './Navbar';
 
 const Dashboard = () => {
@@ -33,7 +33,7 @@ const Dashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/admin/dashboard');
+      const response = await apiClient.get('/admin/dashboard');
       setStats(response.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../apiClient';
 
 const AuthContext = createContext();
 
@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // apiClient attaches Authorization header via interceptor
       fetchUser();
     } else {
       setLoading(false);
@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUser = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/auth/me');
+      const response = await apiClient.get('/auth/me');
       setUser(response.data);
     } catch (error) {
       console.error('Failed to fetch user:', error);
@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       console.log('Logging in...');
-      const response = await axios.post('http://localhost:8000/api/auth/login', {
+      const response = await apiClient.post('/auth/login', {
         username,
         password,
       });
@@ -48,7 +48,6 @@ export const AuthProvider = ({ children }) => {
       const { access_token } = response.data;
       setToken(access_token);
       localStorage.setItem('token', access_token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       
       await fetchUser();
       return { success: true };
@@ -65,7 +64,6 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
   };
 
   const hasRole = (requiredRoles) => {

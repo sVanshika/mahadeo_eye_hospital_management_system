@@ -20,7 +20,7 @@ import {
 } from '@mui/icons-material';
 import { useSocket } from '../contexts/SocketContext';
 import { useOPD } from '../contexts/OPDContext';
-import axios from 'axios';
+import apiClient from '../apiClient';
 import Navbar from './Navbar';
 
 const DisplayScreen = () => {
@@ -51,7 +51,7 @@ const DisplayScreen = () => {
 
   const fetchDisplayData = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/display/all');
+      const response = await apiClient.get('/display/all');
       setDisplayData(response.data);
       setLastUpdated(new Date());
     } catch (error) {

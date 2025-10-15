@@ -31,7 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useOPD } from '../contexts/OPDContext';
-import axios from 'axios';
+import apiClient from '../apiClient';
 import Navbar from './Navbar';
 
 const PatientRegistration = () => {
@@ -55,10 +55,10 @@ const PatientRegistration = () => {
 
   const fetchPatients = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/patients', { params: { latest: true } });
+      const response = await apiClient.get('/patients', { params: { latest: true } });
       setPatients(response.data);
 
-      const response_all_patients = await axios.get('http://localhost:8000/api/patients', { params: { latest: false } });
+      const response_all_patients = await apiClient.get('/patients', { params: { latest: false } });
       setAllPatients(response_all_patients.data);
 
     } catch (error) {
@@ -79,7 +79,7 @@ const PatientRegistration = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:8000/api/patients/register', {
+      const response = await apiClient.post('/patients/register', {
         name: formData.name,
         age: parseInt(formData.age),
         phone: formData.phone || null,
@@ -106,7 +106,7 @@ const PatientRegistration = () => {
     if (!selectedPatient || !selectedOpd) return;
     console.log(`\n\nLAST Confirming OPD allocation:`, selectedPatient, selectedOpd);
     try {
-      const response = await axios.post(`http://localhost:8000/api/patients/${selectedPatient.id}/allocate-opd`, {
+      const response = await apiClient.post(`/patients/${selectedPatient.id}/allocate-opd`, {
         opd_type: selectedOpd,
       });
 

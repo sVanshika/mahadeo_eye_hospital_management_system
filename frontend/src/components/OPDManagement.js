@@ -11,7 +11,6 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Chip,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -40,7 +39,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useOPD } from '../contexts/OPDContext';
-import axios from 'axios';
+import apiClient from '../apiClient';
 import Navbar from './Navbar';
 
 const OPDManagement = () => {
@@ -103,7 +102,7 @@ const OPDManagement = () => {
     }
     try {
       console.log(`Fetching queue data for OPD: ${selectedOpd}`);
-      const response = await axios.get(`http://localhost:8000/api/opd/${selectedOpd}/queue`);
+      const response = await apiClient.get(`/opd/${selectedOpd}/queue`);
       setQueue(response.data);
       console.log(`\n\nQueue data:`, response.data);
     } catch (error) {
@@ -118,7 +117,7 @@ const OPDManagement = () => {
     }
     try {
       console.log(`Fetching stats for OPD: ${selectedOpd}`);
-      const response = await axios.get(`http://localhost:8000/api/opd/${selectedOpd}/stats`);
+      const response = await apiClient.get(`/opd/${selectedOpd}/stats`);
       setStats(response.data);
       console.log(`\n\nStats data:`, response.data);
     } catch (error) {
@@ -135,8 +134,8 @@ const OPDManagement = () => {
       console.log(`\n\nFetching referred patients from ${selectedOpd}`);
       console.log(`\n\nFetching referred patients to ${selectedOpd}`);
       const [fromResp, toResp] = await Promise.all([
-        axios.get(`http://localhost:8000/api/patients/referred`, { params: { from_opd: selectedOpd } }),
-        axios.get(`http://localhost:8000/api/patients/referred`, { params: { to_opd: selectedOpd } })
+        apiClient.get(`/patients/referred`, { params: { from_opd: selectedOpd } }),
+        apiClient.get(`/patients/referred`, { params: { to_opd: selectedOpd } })
       ]);
       setReferredFromHere(fromResp.data || []);
       setReferredToHere(toResp.data || []);
@@ -148,7 +147,7 @@ const OPDManagement = () => {
   const handleCallNext = async () => {
     setLoading(true);
     try {
-      const response = await axios.post(`http://localhost:8000/api/opd/${selectedOpd}/call-next`);
+      const response = await apiClient.post(`/opd/${selectedOpd}/call-next`);
       showSuccess(response.data.message);
       fetchQueueData();
       fetchStats();
@@ -188,13 +187,6 @@ const OPDManagement = () => {
     console.log(`\n\nEnding visit for patient ${patient.token_number}`);
     setSelectedPatient(patient);
     setEndVisitDialogOpen(true);
-    // setActionDialog({
-    //   open: true,
-    //   type: 'end_visit',
-    //   patient: patient,
-    //   title: 'Confirm End Visit',
-    //   message: `Are you sure you want to end the visit for patient ${patient.token_number} (${patient.patient_name})? This will mark their visit as completed.`,
-    // });
   };
 
   const confirmEndVisit = async () => {
@@ -203,13 +195,11 @@ const OPDManagement = () => {
     if (!selectedPatient || !selectedOpd) return;
       console.log(`\n\nPatient not here:`, selectedPatient);
     try {
-      await axios.post(`http://localhost:8000/api/patients/${selectedPatient.patient_id}/endvisit`);
+      await apiClient.post(`/patients/${selectedPatient.patient_id}/endvisit`);
 
       showSuccess(`Patient ${selectedPatient.token_number} visit completed`);
       setEndVisitDialogOpen(false);
       setSelectedPatient(null);
-
-      
 
       fetchQueueData();
 
@@ -225,21 +215,21 @@ const OPDManagement = () => {
 
     try {
       if (type === 'dilate') {
-        await axios.post(`http://localhost:8000/api/opd/${selectedOpd}/dilate-patient/${patient.patient_id}`);
+        await apiClient.post(`/opd/${selectedOpd}/dilate-patient/${patient.patient_id}`);
         showSuccess(`Patient ${patient.token_number} marked for dilation`);
       } else if (type === 'refer') {
         const targetOpd = actionDialog.targetOpd;
         const remarks = actionDialog.remarks
-        await axios.post(`http://localhost:8000/api/patients/${patient.patient_id}/refer`, {
+        await apiClient.post(`/patients/${patient.patient_id}/refer`, {
           to_opd: targetOpd,
           remarks: remarks
         });
         showSuccess(`Patient ${patient.token_number} referred to ${targetOpd.toUpperCase()}`);
       } else if (type === 'return_dilated') {
-        await axios.post(`http://localhost:8000/api/opd/${selectedOpd}/return-dilated/${patient.patient_id}`);
+        await apiClient.post(`/opd/${selectedOpd}/return-dilated/${patient.patient_id}`);
         showSuccess(`Patient ${patient.token_number} returned from dilation`);
       } else if (type === 'end_visit') {
-        await axios.post(`http://localhost:8000/api/patients/${patient.patient_id}/endvisit`);
+        await apiClient.post(`/patients/${patient.patient_id}/endvisit`);
         showSuccess(`Patient ${patient.token_number} visit completed`);
         
       }
@@ -305,7 +295,7 @@ const OPDManagement = () => {
 
     setReturnLoading(true);
     try {
-      await axios.post(`http://localhost:8000/api/patients/${selectedPatientForReturn.patient_id}/return-from-referral`, {
+      await apiClient.post(`/patients/${selectedPatientForReturn.patient_id}/return-from-referral`, {
         opd_code: selectedOpd, // This is the OPD the patient was referred TO, and is now returning FROM
         remarks: returnRemarks,
       });
@@ -523,40 +513,6 @@ const OPDManagement = () => {
                               </DialogActions>
                             </Dialog>
                             
-                            {/* {patient.is_dilated && (
-                              <Chip
-                                label="Dilated"
-                                color="secondary"
-                                size="small"
-                              />
-                            )}
-                            {patient.status === 'pending' && (
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDilatePatient(patient)}
-                                color="secondary"
-                              >
-                                <Schedule />
-                              </IconButton>
-                            )}
-                            {patient.status === 'dilated' && (
-                              <IconButton
-                                size="small"
-                                onClick={() => handleReturnDilated(patient)}
-                                color="primary"
-                              >
-                                <CheckCircle />
-                              </IconButton>
-                            )}
-                            {patient.status === 'in' && (
-                              <IconButton
-                                size="small"
-                                onClick={() => handleReferPatient(patient)}
-                                color="error"
-                              >
-                                <PersonAdd />
-                              </IconButton>
-                            )} */}
                             { (
                               <Button
                                 variant='contained'
