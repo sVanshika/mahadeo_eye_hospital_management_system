@@ -154,7 +154,7 @@ async def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    today = datetime.utcnow().date()
+    today = datetime.now().date()
     
     # Get today's patient statistics
     total_patients_today = db.query(Patient).filter(
@@ -281,7 +281,7 @@ async def get_daily_report(
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     if not report_date:
-        report_date = datetime.utcnow().date()
+        report_date = datetime.now().date()
     
     # Get all patients for the day
     patients = db.query(Patient).filter(

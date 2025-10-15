@@ -220,7 +220,7 @@ async def call_next_patient(
     next_patient.status = PatientStatus.IN_OPD
     next_patient.patient.current_status = PatientStatus.IN_OPD
     next_patient.patient.current_room = f"opd_{opd_type.value}"
-    next_patient.updated_at = datetime.utcnow()
+    next_patient.updated_at = datetime.now()
     
     db.commit()
     
@@ -253,7 +253,7 @@ async def get_opd_display_data(
             "token_number": current_patient_query.patient.token_number,
             "patient_name": current_patient_query.patient.name,
             "status": current_patient_query.status,
-            "waiting_time_minutes": int((datetime.utcnow() - current_patient_query.patient.registration_time).total_seconds() / 60),
+            "waiting_time_minutes": int((datetime.now() - current_patient_query.patient.registration_time).total_seconds() / 60),
             "is_dilated": current_patient_query.patient.is_dilated
         }
     
@@ -270,7 +270,7 @@ async def get_opd_display_data(
             "token_number": entry.patient.token_number,
             "patient_name": entry.patient.name,
             "status": entry.status,
-            "waiting_time_minutes": int((datetime.utcnow() - entry.patient.registration_time).total_seconds() / 60),
+            "waiting_time_minutes": int((datetime.now() - entry.patient.registration_time).total_seconds() / 60),
             "is_dilated": entry.patient.is_dilated
         })
     
@@ -298,7 +298,7 @@ async def get_all_opds_display_data(db: Session = Depends(get_db)):
     
     return {
         "opds": opds_data,
-        "last_updated": datetime.utcnow().isoformat()
+        "last_updated": datetime.now().isoformat()
     }
 
 # Admin endpoints
@@ -307,7 +307,7 @@ async def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    today = datetime.utcnow().date()
+    today = datetime.now().date()
     
     # Get today's patient statistics
     total_patients_today = db.query(Patient).filter(

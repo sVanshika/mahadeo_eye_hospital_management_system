@@ -115,7 +115,7 @@ async def update_opd(
     if opd_data.is_active is not None:
         opd.is_active = opd_data.is_active
     
-    opd.updated_at = datetime.utcnow()
+    opd.updated_at = datetime.now()
     
     db.commit()
     db.refresh(opd)
@@ -135,7 +135,7 @@ async def delete_opd(
     
     # Soft delete - set is_active to False
     opd.is_active = False
-    opd.updated_at = datetime.utcnow()
+    opd.updated_at = datetime.now()
     
     db.commit()
     
@@ -153,7 +153,7 @@ async def activate_opd(
         raise HTTPException(status_code=404, detail="OPD not found")
     
     opd.is_active = True
-    opd.updated_at = datetime.utcnow()
+    opd.updated_at = datetime.now()
     
     db.commit()
     

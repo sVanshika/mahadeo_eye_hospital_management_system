@@ -52,7 +52,7 @@ async def print_opd_slip(
     estimated_wait = None
     if patient.registration_time:
         from datetime import datetime
-        wait_minutes = int((datetime.utcnow() - patient.registration_time).total_seconds() / 60)
+        wait_minutes = int((datetime.now() - patient.registration_time).total_seconds() / 60)
         estimated_wait = max(0, wait_minutes)
     
     success = printer_manager.print_opd_slip(

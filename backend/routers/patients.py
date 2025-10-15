@@ -257,9 +257,9 @@ async def update_patient_status(
     # Handle special cases
     if status == PatientStatus.DILATED:
         patient.is_dilated = True
-        patient.dilation_time = datetime.utcnow()
+        patient.dilation_time = datetime.now()
     elif status == PatientStatus.COMPLETED:
-        patient.completed_at = datetime.utcnow()
+        patient.completed_at = datetime.now()
         # Remove from queue
         db.query(Queue).filter(
             Queue.patient_id == patient_id,
@@ -274,7 +274,7 @@ async def update_patient_status(
     
     if queue_entry:
         queue_entry.status = status
-        queue_entry.updated_at = datetime.utcnow()
+        queue_entry.updated_at = datetime.now()
     
     # Log patient flow
     flow_entry = PatientFlow(

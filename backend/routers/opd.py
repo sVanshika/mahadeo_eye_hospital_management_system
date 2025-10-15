@@ -123,7 +123,7 @@ async def call_next_patient(
     # Update queue status to IN_OPD, but keep patient's overall status as REFERRED if they were referred
     next_patient.status = PatientStatus.IN_OPD
     next_patient.patient.current_room = f"opd_{opd_type}"
-    next_patient.updated_at = datetime.utcnow()
+    next_patient.updated_at = datetime.now()
     
     # Only update patient's current_status to IN_OPD if they're not a referred patient
     if next_patient.patient.current_status != PatientStatus.REFERRED:
@@ -181,7 +181,7 @@ async def dilate_patient(
     
     if queue_entry:
         queue_entry.status = PatientStatus.DILATED
-        queue_entry.updated_at = datetime.utcnow()
+        queue_entry.updated_at = datetime.now()
     
     # Log patient flow
     flow_entry = PatientFlow(
@@ -217,7 +217,7 @@ async def return_dilated_patient(
     
     # Check if dilation time has passed (30-40 minutes)
     # if patient.dilation_time:
-    #     time_since_dilation = datetime.utcnow() - patient.dilation_time
+    #     time_since_dilation = datetime.now() - patient.dilation_time
     #     if time_since_dilation < timedelta(minutes=30):
     #         remaining_time = 30 - int(time_since_dilation.total_seconds() / 60)
     #         raise HTTPException(
@@ -237,7 +237,7 @@ async def return_dilated_patient(
     
     if queue_entry:
         queue_entry.status = PatientStatus.PENDING
-        queue_entry.updated_at = datetime.utcnow()
+        queue_entry.updated_at = datetime.now()
     
     # Log patient flow
     flow_entry = PatientFlow(
@@ -270,7 +270,7 @@ async def get_opd_stats(
     if not opd:
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
     
-    today = datetime.utcnow().date()
+    today = datetime.now().date()
     
     # Get queue statistics
     total_patients = db.query(Queue).filter(Queue.opd_type == opd_type).count()
