@@ -215,7 +215,7 @@ const PatientRegistration = () => {
                   {patients.slice(0, 10).map((patient) => (
                     <ListItem key={patient.id} divider>
                       <ListItemText
-                        primary={`${patient.token_number.split("-")[1]} - ${patient.name}`}
+                        primary={`${patient.token_number} - ${patient.name}`}
                         secondary={`Age: ${patient.age} | Status: ${getStatusLabel(patient.current_status)}`}
                       />
                       <ListItemSecondaryAction>
@@ -263,7 +263,7 @@ const PatientRegistration = () => {
                   {all_patients.map((patient) => (
                     <ListItem key={patient.id} divider>
                       <ListItemText
-                        primary={`${patient.token_number.split("-")[1]} - ${patient.name}`}
+                        primary={`${patient.token_number} - ${patient.name}`}
                         secondary={`Age: ${patient.age} | Phone: ${patient.phone || 'N/A'} | Registered: ${new Date(patient.registration_time).toLocaleString()}`}
                       />
                       <ListItemSecondaryAction>

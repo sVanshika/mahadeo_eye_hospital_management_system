@@ -20,8 +20,11 @@ class QueueResponse(BaseModel):
     status: PatientStatus
     registration_time: datetime
     is_dilated: bool
+    dilation_time: Optional[datetime] = None
     age: int
     phone: Optional[str]
+    is_referred: bool
+    referred_from: Optional[str]
 
     class Config:
         from_attributes = True
@@ -81,8 +84,11 @@ async def get_opd_queue(
             status=entry.status,
             registration_time=entry.patient.registration_time,
             is_dilated=entry.patient.is_dilated,
+            dilation_time=entry.patient.dilation_time,
             age=entry.patient.age,
-            phone=entry.patient.phone
+            phone=entry.patient.phone,
+            is_referred=(entry.patient.current_status == PatientStatus.REFERRED),
+            referred_from=entry.patient.referred_from
         ))
     
     return queue_data
@@ -165,7 +171,7 @@ async def dilate_patient(
     # Update patient status
     patient.current_status = PatientStatus.DILATED
     patient.is_dilated = True
-    patient.dilation_time = datetime.utcnow()
+    patient.dilation_time = datetime.now()
     
     # Update queue status
     queue_entry = db.query(Queue).filter(
@@ -183,7 +189,7 @@ async def dilate_patient(
         from_room=f"opd_{opd_type}",
         to_room="dilation_area",
         status=PatientStatus.DILATED,
-        notes="Patient given dilation drops, waiting 30-40 minutes"
+        notes=f"Patient given dilation drops."
     )
     db.add(flow_entry)
     db.commit()
@@ -210,17 +216,17 @@ async def return_dilated_patient(
         raise HTTPException(status_code=400, detail="Patient is not dilated")
     
     # Check if dilation time has passed (30-40 minutes)
-    if patient.dilation_time:
-        time_since_dilation = datetime.utcnow() - patient.dilation_time
-        if time_since_dilation < timedelta(minutes=30):
-            remaining_time = 30 - int(time_since_dilation.total_seconds() / 60)
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Dilation time not complete. Please wait {remaining_time} more minutes"
-            )
+    # if patient.dilation_time:
+    #     time_since_dilation = datetime.utcnow() - patient.dilation_time
+    #     if time_since_dilation < timedelta(minutes=30):
+    #         remaining_time = 30 - int(time_since_dilation.total_seconds() / 60)
+    #         raise HTTPException(
+    #             status_code=400, 
+    #             detail=f"Dilation time not complete. Please wait {remaining_time} more minutes"
+    #         )
     
     # Update patient status back to IN_OPD
-    patient.current_status = PatientStatus.IN_OPD
+    patient.current_status = PatientStatus.PENDING
     patient.current_room = f"opd_{opd_type}"
     
     # Update queue status
@@ -230,7 +236,7 @@ async def return_dilated_patient(
     ).first()
     
     if queue_entry:
-        queue_entry.status = PatientStatus.IN_OPD
+        queue_entry.status = PatientStatus.PENDING
         queue_entry.updated_at = datetime.utcnow()
     
     # Log patient flow
@@ -238,9 +244,11 @@ async def return_dilated_patient(
         patient_id=patient_id,
         from_room="dilation_area",
         to_room=f"opd_{opd_type}",
-        status=PatientStatus.IN_OPD,
-        notes="Patient returned from dilation"
+        status=PatientStatus.PENDING,
+        notes=f"Patient returned from dilation, dilation time - {patient.dilation_time}"
     )
+    patient.is_dilated = False
+    patient.dilation_time = None
     db.add(flow_entry)
     db.commit()
     

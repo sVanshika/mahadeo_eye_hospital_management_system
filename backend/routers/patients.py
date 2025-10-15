@@ -138,7 +138,7 @@ async def list_referred_patients(
     current_user: User = Depends(get_current_active_user)
 ):
     query = db.query(Patient).filter(Patient.current_status == PatientStatus.REFERRED)
-
+    
     # Get valid OPD codes from database
     valid_opds = {opd.opd_code for opd in db.query(OPD).filter(OPD.is_active == True).all()}
     if from_opd and from_opd in valid_opds:
@@ -368,6 +368,97 @@ async def refer_patient(
 
     return {"message": f"Patient referred to {to_opd} and present in both queues as referred"}
 
+
+class ReturnReferredPatientRequest(BaseModel):
+    opd_code: str # The OPD from which the patient is being returned (i.e., the referred_to OPD)
+    remarks: Optional[str] = None
+
+@router.post("/{patient_id}/return-from-referral")
+async def return_referred_patient(
+    patient_id: int,
+    payload: ReturnReferredPatientRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.NURSING))
+):
+    opd_code_from_payload = payload.opd_code # This is the OPD the patient was referred TO, and is now returning FROM
+    remarks = payload.remarks
+
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    if patient.current_status != PatientStatus.REFERRED:
+        raise HTTPException(status_code=400, detail="Patient is not currently in 'REFERRED' status.")
+    
+    if patient.referred_to != opd_code_from_payload:
+        raise HTTPException(status_code=400, detail=f"Patient was not referred to {opd_code_from_payload}. Referred to: {patient.referred_to}")
+
+    original_opd_code = patient.referred_from
+    if not original_opd_code:
+        raise HTTPException(status_code=400, detail="Patient's original OPD (referred_from) is not set, cannot return.")
+
+    # 1. Update Patient object
+    patient.current_status = PatientStatus.PENDING
+    patient.allocated_opd = original_opd_code
+    patient.current_room = f"opd_{original_opd_code}"
+    patient.referred_from = None
+    patient.referred_to = None
+    # Dilation status (is_dilated, dilation_time) is preserved as it's independent of referral status.
+    
+    # 2. Update Queue entry for the original OPD (where patient is returning TO)
+    original_opd_queue_entry = db.query(Queue).filter(
+        Queue.patient_id == patient_id,
+        Queue.opd_type == original_opd_code
+    ).first()
+
+    if not original_opd_queue_entry:
+        # This case should ideally not happen if the patient was properly referred and had an entry in their original OPD.
+        # If it does, we'll create a new entry to ensure they are in the queue.
+        max_position_original = db.query(func.max(Queue.position)).filter(
+            Queue.opd_type == original_opd_code
+        ).scalar() or 0
+        original_opd_queue_entry = Queue(
+            opd_type=original_opd_code,
+            patient_id=patient_id,
+            position=max_position_original + 1,
+            status=PatientStatus.PENDING
+        )
+        db.add(original_opd_queue_entry)
+    else:
+        original_opd_queue_entry.status = PatientStatus.PENDING
+        original_opd_queue_entry.updated_at = datetime.now()
+
+    # 3. Update Queue entry for the OPD the patient was referred TO (where patient is returning FROM)
+    referred_to_opd_queue_entry = db.query(Queue).filter(
+        Queue.patient_id == patient_id,
+        Queue.opd_type == opd_code_from_payload
+    ).first()
+
+    if referred_to_opd_queue_entry:
+        # Mark as completed for this queue, as the patient is no longer being managed here.
+        referred_to_opd_queue_entry.status = PatientStatus.COMPLETED 
+        referred_to_opd_queue_entry.updated_at = datetime.now()
+    # If not found, it might have been processed/removed already, which is acceptable.
+
+    # 4. Log patient flow
+    flow_entry = PatientFlow(
+        patient_id=patient_id,
+        from_room=f"opd_{opd_code_from_payload}",
+        to_room=f"opd_{original_opd_code}",
+        status=PatientStatus.PENDING, # Patient is now pending in their original OPD
+        notes=remarks
+    )
+    db.add(flow_entry)
+    db.commit()
+    db.refresh(patient) # Refresh patient to get updated fields
+
+    # 5. Broadcast updates
+    await broadcast_queue_update(original_opd_code, db)
+    await broadcast_queue_update(opd_code_from_payload, db) # Update the queue they left
+    await broadcast_patient_status_update(patient_id, PatientStatus.PENDING, db)
+    await broadcast_display_update()
+
+    return {"message": f"Patient {patient.name} ({patient.token_number}) returned to original OPD: {original_opd_code}"}
 
 
 

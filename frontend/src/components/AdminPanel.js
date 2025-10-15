@@ -495,6 +495,7 @@ const AdminPanel = () => {
                 <Table>
                   <TableHead>
                     <TableRow>
+                      <TableCell>ID</TableCell>
                       <TableCell>Token</TableCell>
                       <TableCell>Patient</TableCell>
                       <TableCell>From Room</TableCell>
@@ -507,6 +508,7 @@ const AdminPanel = () => {
                   <TableBody>
                     {patientFlows.map((flow) => (
                       <TableRow key={flow.id}>
+                        <TableCell>{flow.patient_id}</TableCell>
                         <TableCell>{flow.token_number}</TableCell>
                         <TableCell>{flow.patient_name}</TableCell>
                         <TableCell>{flow.from_room || '-'}</TableCell>

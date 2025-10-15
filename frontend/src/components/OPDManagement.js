@@ -25,7 +25,7 @@ import {
   Typography,
   Typography as MuiTypography,
   Divider,
-  Tooltip
+  Tooltip,
 } from '@mui/material';
 import {
   Refresh,
@@ -57,6 +57,10 @@ const OPDManagement = () => {
   const [referredToHere, setReferredToHere] = useState([]);     // referred from elsewhere to selectedOpd
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [endVisitDialogOpen, setEndVisitDialogOpen] = useState(false);
+  const [returnReferralDialogOpen, setReturnReferralDialogOpen] = useState(false);
+  const [selectedPatientForReturn, setSelectedPatientForReturn] = useState(null);
+  const [returnRemarks, setReturnRemarks] = useState('');
+  const [returnLoading, setReturnLoading] = useState(false);
 
   // Set default OPD when activeOPDs are loaded
   useEffect(() => {
@@ -263,7 +267,7 @@ const OPDManagement = () => {
     return statusColors[status] || 'default';
   };
 
-  const getStatusLabel = (status) => {
+  const getStatusLabel = (status, dilation_time) => {
     const statusLabels = {
       pending: 'Waiting',
       in: 'In OPD',
@@ -272,7 +276,10 @@ const OPDManagement = () => {
       end_visit: 'Completed',
       completed: 'Completed',
     };
-    return statusLabels[status] || status;
+    let label = statusLabels[status] || status;
+    if(status === 'dilated')
+      label = label + " - " + formatWaitingTime(dilation_time);
+    return label;
   };
 
   const formatWaitingTime = (registrationTime) => {
@@ -285,6 +292,32 @@ const OPDManagement = () => {
     const days = Math.floor(hours / 24);
     hours = hours % 24;
     return ` ${days}d ${hours}h ${minutes}m`;
+  };
+
+  const handleReturnFromReferral = (patient) => {
+    setSelectedPatientForReturn(patient);
+    setReturnRemarks(''); // Clear previous remarks
+    setReturnReferralDialogOpen(true);
+  };
+
+  const confirmReturnFromReferral = async () => {
+    if (!selectedPatientForReturn) return;
+
+    setReturnLoading(true);
+    try {
+      await axios.post(`http://localhost:8000/api/patients/${selectedPatientForReturn.patient_id}/return-from-referral`, {
+        opd_code: selectedOpd, // This is the OPD the patient was referred TO, and is now returning FROM
+        remarks: returnRemarks,
+      });
+      showSuccess(`Patient ${selectedPatientForReturn.patient_name} returned to original OPD.`);
+      setReturnReferralDialogOpen(false);
+      fetchQueueData(); // Refresh the queue
+    } catch (error) {
+      console.error('Error returning patient from referral:', error);
+      showError(error.response?.data?.detail || 'Failed to return patient from referral.');
+    } finally {
+      setReturnLoading(false);
+    }
   };
 
   return (
@@ -403,18 +436,31 @@ const OPDManagement = () => {
                         <ListItemSecondaryAction>
                           <Box display="flex" alignItems="center" gap={1}>
                             <Chip
-                              label={getStatusLabel(patient.status)}
+                              label={getStatusLabel(patient.status, patient.dilation_time)}
                               color={getStatusColor(patient.status)}
                               size="small"
                             />
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={() => handleDilatePatient(patient)}
-                                disabled={patient.status !== 'in'}
-                            >
-                              Dilate  
-                            </Button>
+                            
+                            {patient.status !== 'dilated' && (
+                              <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => handleDilatePatient(patient)}
+                                  disabled={patient.status !== 'in'}
+                              >
+                                Dilate  
+                              </Button>
+                            )}
+                            {patient.status === 'dilated' && (
+                              <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => handleReturnDilated(patient)}
+                                  disabled={patient.status !== 'dilated'}
+                              >
+                                End Dilation
+                              </Button>
+                            )}
                             <Button
                                 variant="outlined"
                                 size="small"
@@ -423,6 +469,60 @@ const OPDManagement = () => {
                             >
                               Refer
                             </Button>
+                            {console.log(patient.is_referred)}
+                            {patient.is_referred  && (
+                              
+                              <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => handleReturnFromReferral(patient)}
+                                  color="success"
+                                  tooltip="This is a referred patient. Click to send back to the original OPD."
+                              >
+                                Return
+                              </Button>
+                              
+                            )}
+                            
+
+                            {/* This Dialog should ideally be placed at the root level of the component's return block,
+                                not nested deeply within ListItemSecondaryAction, for proper rendering and accessibility. */}
+                            <Dialog open={returnReferralDialogOpen} 
+                              onClose={() => setReturnReferralDialogOpen(false)}
+                              fullWidth>
+                              <DialogTitle>Referred Patient. End Visit in current OPD and send back to the original OPD</DialogTitle>
+                              <DialogContent>
+                                <Typography variant="body1" gutterBottom>
+                                  Patient: {selectedPatientForReturn?.patient_name} ({selectedPatientForReturn?.token_number.split("-")[1]})
+                                </Typography>
+                                <Typography variant="body2" color="textSecondary" gutterBottom>
+                                  Returning to OPD: {selectedPatientForReturn?.referred_from?.toUpperCase()}
+                                </Typography>
+                                <TextField
+                                  margin="normal"
+                                  fullWidth
+                                  label="Remarks (Optional)"
+                                  multiline
+                                  rows={3}
+                                  value={returnRemarks}
+                                  onChange={(e) => setReturnRemarks(e.target.value)}
+                                />
+                              </DialogContent>
+                              <DialogActions>
+                                <Button onClick={() => setReturnReferralDialogOpen(false)} color="primary">
+                                  Cancel
+                                </Button>
+                                <Button
+                                  onClick={confirmReturnFromReferral}
+                                  color="success"
+                                  variant="contained"
+                                  disabled={returnLoading}
+                                >
+                                  {returnLoading ? 'Returning...' : 'Confirm Return'}
+                                </Button>
+                              </DialogActions>
+                            </Dialog>
+                            
                             {/* {patient.is_dilated && (
                               <Chip
                                 label="Dilated"
@@ -537,8 +637,8 @@ const OPDManagement = () => {
                         <ListItemSecondaryAction>
                           {/* <Chip label="Referred" color="error" size="small" /> */}
                           <Chip
-                              label={getStatusLabel(p.status)}
-                              color={getStatusColor(p.status)}
+                              label={getStatusLabel(p.current_queue_status)}
+                              color={getStatusColor(p.current_queue_status)}
                               size="small"
                             />
                         </ListItemSecondaryAction>
@@ -565,8 +665,8 @@ const OPDManagement = () => {
                         <ListItemSecondaryAction>
                           {/* <Chip label="Referred" color="error" size="small" /> */}
                           <Chip
-                              label={getStatusLabel(p.status)}
-                              color={getStatusColor(p.status)}
+                              label={getStatusLabel(p.current_queue_status)}
+                              color={getStatusColor(p.current_queue_status)}
                               size="small"
                             />
                         </ListItemSecondaryAction>
