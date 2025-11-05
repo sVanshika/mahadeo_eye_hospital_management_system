@@ -8,7 +8,8 @@ from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientF
 from auth import get_current_active_user, User, require_role, UserRole
 from websocket_manager import broadcast_queue_update, broadcast_patient_status_update, broadcast_display_update
 import asyncio
-
+import pytz
+ist = pytz.timezone('Asia/Kolkata')
 router = APIRouter()
 
 # Pydantic models
@@ -83,7 +84,7 @@ class ReferredPatientResponse(BaseModel):
 
 # Helper function to generate token number
 def generate_token_number(db: Session) -> str:
-    today = datetime.now().strftime("%Y%m%d")
+    today = datetime.now(ist).strftime("%Y%m%d")
     last_token = db.query(Patient).filter(
         Patient.token_number.like(f"{today}%")
     ).order_by(Patient.id.desc()).first()
@@ -111,7 +112,7 @@ async def register_patient(
         name=patient_data.name,
         age=patient_data.age,
         phone=patient_data.phone,
-        registration_time=datetime.now()
+        registration_time=datetime.now(ist)
     )
     
     db.add(db_patient)
@@ -257,9 +258,9 @@ async def update_patient_status(
     # Handle special cases
     if status == PatientStatus.DILATED:
         patient.is_dilated = True
-        patient.dilation_time = datetime.now()
+        patient.dilation_time = datetime.now(ist)
     elif status == PatientStatus.COMPLETED:
-        patient.completed_at = datetime.now()
+        patient.completed_at = datetime.now(ist)
         # Remove from queue
         db.query(Queue).filter(
             Queue.patient_id == patient_id,
@@ -274,7 +275,7 @@ async def update_patient_status(
     
     if queue_entry:
         queue_entry.status = status
-        queue_entry.updated_at = datetime.now()
+        queue_entry.updated_at = datetime.now(ist)
     
     # Log patient flow
     flow_entry = PatientFlow(
@@ -426,7 +427,7 @@ async def return_referred_patient(
         db.add(original_opd_queue_entry)
     else:
         original_opd_queue_entry.status = PatientStatus.PENDING
-        original_opd_queue_entry.updated_at = datetime.now()
+        original_opd_queue_entry.updated_at = datetime.now(ist)
 
     # 3. Update Queue entry for the OPD the patient was referred TO (where patient is returning FROM)
     referred_to_opd_queue_entry = db.query(Queue).filter(
@@ -437,7 +438,7 @@ async def return_referred_patient(
     if referred_to_opd_queue_entry:
         # Mark as completed for this queue, as the patient is no longer being managed here.
         referred_to_opd_queue_entry.status = PatientStatus.COMPLETED 
-        referred_to_opd_queue_entry.updated_at = datetime.now()
+        referred_to_opd_queue_entry.updated_at = datetime.now(ist)
     # If not found, it might have been processed/removed already, which is acceptable.
 
     # 4. Log patient flow
@@ -553,7 +554,7 @@ async def end_patient_visit(
     # Update patient status and details
     patient.current_status = PatientStatus.COMPLETED
     patient.status = PatientStatus.COMPLETED
-    patient.completed_at = datetime.now()
+    patient.completed_at = datetime.now(ist)
     patient.current_room = None # Patient is no longer in any active room
     patient.allocated_opd = None # Patient is no longer allocated to an OPD
     patient.referred_from = None # Clear referral status

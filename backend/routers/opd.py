@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow
 from auth import get_current_active_user, User, require_role, UserRole
 from websocket_manager import broadcast_queue_update, broadcast_patient_status_update, broadcast_display_update
-
+import pytz
+ist = pytz.timezone('Asia/Kolkata')
 router = APIRouter()
 
 # Pydantic models
@@ -123,7 +124,7 @@ async def call_next_patient(
     # Update queue status to IN_OPD, but keep patient's overall status as REFERRED if they were referred
     next_patient.status = PatientStatus.IN_OPD
     next_patient.patient.current_room = f"opd_{opd_type}"
-    next_patient.updated_at = datetime.now()
+    next_patient.updated_at = datetime.now(ist)
     
     # Only update patient's current_status to IN_OPD if they're not a referred patient
     if next_patient.patient.current_status != PatientStatus.REFERRED:
@@ -165,13 +166,13 @@ async def dilate_patient(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
-    if patient.allocated_opd != opd_type:
-        raise HTTPException(status_code=400, detail="Patient not in this OPD")
+    # if patient.allocated_opd != opd_type:
+    #     raise HTTPException(status_code=400, detail="Patient not in this OPD")
     
     # Update patient status
     patient.current_status = PatientStatus.DILATED
     patient.is_dilated = True
-    patient.dilation_time = datetime.now()
+    patient.dilation_time = datetime.now(ist)
     
     # Update queue status
     queue_entry = db.query(Queue).filter(
@@ -181,7 +182,7 @@ async def dilate_patient(
     
     if queue_entry:
         queue_entry.status = PatientStatus.DILATED
-        queue_entry.updated_at = datetime.now()
+        queue_entry.updated_at = datetime.now(ist)
     
     # Log patient flow
     flow_entry = PatientFlow(
@@ -217,7 +218,7 @@ async def return_dilated_patient(
     
     # Check if dilation time has passed (30-40 minutes)
     # if patient.dilation_time:
-    #     time_since_dilation = datetime.now() - patient.dilation_time
+    #     time_since_dilation = datetime.now(ist) - patient.dilation_time
     #     if time_since_dilation < timedelta(minutes=30):
     #         remaining_time = 30 - int(time_since_dilation.total_seconds() / 60)
     #         raise HTTPException(
@@ -237,7 +238,7 @@ async def return_dilated_patient(
     
     if queue_entry:
         queue_entry.status = PatientStatus.PENDING
-        queue_entry.updated_at = datetime.now()
+        queue_entry.updated_at = datetime.now(ist)
     
     # Log patient flow
     flow_entry = PatientFlow(
@@ -270,7 +271,7 @@ async def get_opd_stats(
     if not opd:
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
     
-    today = datetime.now().date()
+    today = datetime.now(ist).date()
     
     # Get queue statistics
     total_patients = db.query(Queue).filter(Queue.opd_type == opd_type).count()

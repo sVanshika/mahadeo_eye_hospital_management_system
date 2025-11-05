@@ -10,6 +10,9 @@ from database_sqlite import get_db, User, UserRole
 import os
 from dotenv import load_dotenv
 
+import pytz
+ist = pytz.timezone('Asia/Kolkata')
+
 load_dotenv()
 
 # Configuration
@@ -79,9 +82,9 @@ def get_password_hash(password):
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now() + expires_delta
+        expire = datetime.now(ist) + expires_delta
     else:
-        expire = datetime.now() + timedelta(minutes=15)
+        expire = datetime.now(ist) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

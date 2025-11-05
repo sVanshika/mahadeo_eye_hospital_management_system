@@ -5,6 +5,8 @@ import io
 import os
 from typing import Optional
 import logging
+import pytz
+ist = pytz.timezone('Asia/Kolkata')
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +115,7 @@ class PrinterManager:
         
         # Draw timestamp
         from datetime import datetime
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
         draw.text((width//2, 250), f"Time: {timestamp}", fill='black', font=small_font, anchor="mm")
         
         # Draw footer

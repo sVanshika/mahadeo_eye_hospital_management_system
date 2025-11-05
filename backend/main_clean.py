@@ -8,6 +8,8 @@ from pydantic import BaseModel
 import uvicorn
 from dotenv import load_dotenv
 import os
+import pytz
+ist = pytz.timezone('Asia/Kolkata')
 
 from database_sqlite import engine, Base, get_db, User, Room, Patient, Queue, PatientStatus, OPDType, PatientFlow, UserRole
 from auth import get_password_hash, verify_password, create_access_token, get_current_active_user, require_role
@@ -90,7 +92,7 @@ async def register_patient(
     current_user: User = Depends(require_role(UserRole.REGISTRATION))
 ):
     # Generate unique token number
-    today = datetime.now().strftime("%Y%m%d")
+    today = datetime.now(ist).strftime("%Y%m%d")
     last_token = db.query(Patient).filter(
         Patient.token_number.like(f"{today}%")
     ).order_by(Patient.id.desc()).first()
@@ -220,7 +222,7 @@ async def call_next_patient(
     next_patient.status = PatientStatus.IN_OPD
     next_patient.patient.current_status = PatientStatus.IN_OPD
     next_patient.patient.current_room = f"opd_{opd_type.value}"
-    next_patient.updated_at = datetime.now()
+    next_patient.updated_at = datetime.now(ist)
     
     db.commit()
     
@@ -253,7 +255,7 @@ async def get_opd_display_data(
             "token_number": current_patient_query.patient.token_number,
             "patient_name": current_patient_query.patient.name,
             "status": current_patient_query.status,
-            "waiting_time_minutes": int((datetime.now() - current_patient_query.patient.registration_time).total_seconds() / 60),
+            "waiting_time_minutes": int((datetime.now(ist) - current_patient_query.patient.registration_time).total_seconds() / 60),
             "is_dilated": current_patient_query.patient.is_dilated
         }
     
@@ -270,7 +272,7 @@ async def get_opd_display_data(
             "token_number": entry.patient.token_number,
             "patient_name": entry.patient.name,
             "status": entry.status,
-            "waiting_time_minutes": int((datetime.now() - entry.patient.registration_time).total_seconds() / 60),
+            "waiting_time_minutes": int((datetime.now(ist) - entry.patient.registration_time).total_seconds() / 60),
             "is_dilated": entry.patient.is_dilated
         })
     
@@ -298,7 +300,7 @@ async def get_all_opds_display_data(db: Session = Depends(get_db)):
     
     return {
         "opds": opds_data,
-        "last_updated": datetime.now().isoformat()
+        "last_updated": datetime.now(ist).isoformat()
     }
 
 # Admin endpoints
@@ -307,7 +309,7 @@ async def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    today = datetime.now().date()
+    today = datetime.now(ist).date()
     
     # Get today's patient statistics
     total_patients_today = db.query(Patient).filter(

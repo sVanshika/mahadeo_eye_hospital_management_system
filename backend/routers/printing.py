@@ -5,7 +5,8 @@ from database_sqlite import get_db, Patient, OPD
 from auth import get_current_active_user, User, require_role, UserRole
 from printing import printer_manager
 from pydantic import BaseModel
-
+import pytz
+ist = pytz.timezone('Asia/Kolkata')
 router = APIRouter()
 
 class PrintRequest(BaseModel):
@@ -52,7 +53,7 @@ async def print_opd_slip(
     estimated_wait = None
     if patient.registration_time:
         from datetime import datetime
-        wait_minutes = int((datetime.now() - patient.registration_time).total_seconds() / 60)
+        wait_minutes = int((datetime.now(ist) - patient.registration_time).total_seconds() / 60)
         estimated_wait = max(0, wait_minutes)
     
     success = printer_manager.print_opd_slip(

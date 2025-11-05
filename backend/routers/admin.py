@@ -9,6 +9,9 @@ from auth import get_current_active_user, User, require_role, UserCreate, UserRe
 
 router = APIRouter()
 
+import pytz
+ist = pytz.timezone('Asia/Kolkata')
+
 # Pydantic models
 class RoomCreate(BaseModel):
     room_number: str
@@ -154,7 +157,7 @@ async def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    today = datetime.now().date()
+    today = datetime.now(ist).date()
     
     # Get today's patient statistics
     total_patients_today = db.query(Patient).filter(
@@ -281,7 +284,7 @@ async def get_daily_report(
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     if not report_date:
-        report_date = datetime.now().date()
+        report_date = datetime.now(ist).date()
     
     # Get all patients for the day
     patients = db.query(Patient).filter(
