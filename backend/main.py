@@ -29,20 +29,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
-# FRONTEND_ORIGINS can be a comma-separated list, e.g. "https://your-frontend.com,https://staging-frontend.com"
-frontend_origins_env = os.getenv("FRONTEND_ORIGINS", "*")
-allowed_origins = [o.strip() for o in frontend_origins_env.split(",") if o.strip()]
-
-# If wildcard is used, we must not enable allow_credentials due to CORS spec
-allow_credentials = "*" not in allowed_origins
-
+# CORS middleware - Allow all origins for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=allow_credentials,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=False,  # Must be False when using wildcard
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers

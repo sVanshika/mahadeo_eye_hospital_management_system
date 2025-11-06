@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
-from database_sqlite import get_db, OPD
+from database_sqlite import get_db, OPD, get_ist_now
 from auth import get_current_active_user, User, require_role, UserRole
 import pytz
 ist = pytz.timezone('Asia/Kolkata')
@@ -116,7 +116,7 @@ async def update_opd(
     if opd_data.is_active is not None:
         opd.is_active = opd_data.is_active
     
-    opd.updated_at = datetime.now(ist)
+    opd.updated_at = get_ist_now()
     
     db.commit()
     db.refresh(opd)
@@ -136,7 +136,7 @@ async def delete_opd(
     
     # Soft delete - set is_active to False
     opd.is_active = False
-    opd.updated_at = datetime.now(ist)
+    opd.updated_at = get_ist_now()
     
     db.commit()
     
@@ -154,7 +154,7 @@ async def activate_opd(
         raise HTTPException(status_code=404, detail="OPD not found")
     
     opd.is_active = True
-    opd.updated_at = datetime.now(ist)
+    opd.updated_at = get_ist_now()
     
     db.commit()
     

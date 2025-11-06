@@ -4,7 +4,7 @@ from sqlalchemy import func, desc
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, User, Room, Patient, Queue, PatientStatus, OPD, PatientFlow, UserRole
+from database_sqlite import get_db, User, Room, Patient, Queue, PatientStatus, OPD, PatientFlow, UserRole, get_ist_now
 from auth import get_current_active_user, User, require_role, UserCreate, UserResponse
 
 router = APIRouter()
@@ -157,7 +157,7 @@ async def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    today = datetime.now(ist).date()
+    today = get_ist_now().date()
     
     # Get today's patient statistics
     total_patients_today = db.query(Patient).filter(
@@ -284,7 +284,7 @@ async def get_daily_report(
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     if not report_date:
-        report_date = datetime.now(ist).date()
+        report_date = get_ist_now().date()
     
     # Get all patients for the day
     patients = db.query(Patient).filter(

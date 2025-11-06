@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow
+from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow, get_ist_now
 from auth import get_current_active_user, User, require_role, UserRole
 from websocket_manager import broadcast_queue_update, broadcast_patient_status_update, broadcast_display_update
 import pytz
@@ -64,6 +64,17 @@ async def get_opd_queue(
             (Patient.referred_to.isnot(None))
         )
     ).order_by(Queue.position).all()
+    
+    # Sort referred patients by total waiting time (descending - longest waiting first)
+    # Separate referred and non-referred patients
+    referred_patients = [e for e in queue_entries if e.patient.current_status == PatientStatus.REFERRED and e.status == PatientStatus.PENDING]
+    other_patients = [e for e in queue_entries if not (e.patient.current_status == PatientStatus.REFERRED and e.status == PatientStatus.PENDING)]
+    
+    # Sort referred patients by registration time (oldest first = longest waiting)
+    referred_patients.sort(key=lambda x: x.patient.registration_time)
+    
+    # Combine: other patients in their original order, then referred patients sorted by waiting time
+    queue_entries = other_patients + referred_patients
 
     print("**** get_opd_queue ****")
     for entry in queue_entries:
@@ -105,8 +116,8 @@ async def call_next_patient(
     if not opd:
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
     
-    # Get next patient in queue (including referred patients who can be called)
-    next_patient = db.query(Queue).join(Patient).filter(
+    # Get all pending patients (including referred patients who can be called)
+    pending_patients = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
         Queue.status.in_([PatientStatus.PENDING, PatientStatus.REFERRED])
     ).filter(
@@ -116,7 +127,25 @@ async def call_next_patient(
             (Patient.referred_to != opd_type) & 
             (Patient.referred_to.isnot(None))
         )
-    ).order_by(Queue.position).first()
+    ).order_by(Queue.position).all()
+    
+    if not pending_patients:
+        raise HTTPException(status_code=404, detail="No patients in queue")
+    
+    # Sort: Regular patients by position, then referred patients by waiting time
+    regular_patients = [p for p in pending_patients if p.patient.current_status != PatientStatus.REFERRED]
+    referred_patients = [p for p in pending_patients if p.patient.current_status == PatientStatus.REFERRED]
+    
+    # Sort referred patients by registration time (oldest first)
+    referred_patients.sort(key=lambda x: x.patient.registration_time)
+    
+    # Get the first patient from regular queue, or first referred if no regular
+    if regular_patients:
+        next_patient = regular_patients[0]
+    elif referred_patients:
+        next_patient = referred_patients[0]
+    else:
+        raise HTTPException(status_code=404, detail="No patients in queue")
     
     if not next_patient:
         raise HTTPException(status_code=404, detail="No patients in queue")
@@ -124,7 +153,7 @@ async def call_next_patient(
     # Update queue status to IN_OPD, but keep patient's overall status as REFERRED if they were referred
     next_patient.status = PatientStatus.IN_OPD
     next_patient.patient.current_room = f"opd_{opd_type}"
-    next_patient.updated_at = datetime.now(ist)
+    next_patient.updated_at = get_ist_now()
     
     # Only update patient's current_status to IN_OPD if they're not a referred patient
     if next_patient.patient.current_status != PatientStatus.REFERRED:
@@ -172,7 +201,7 @@ async def dilate_patient(
     # Update patient status
     patient.current_status = PatientStatus.DILATED
     patient.is_dilated = True
-    patient.dilation_time = datetime.now(ist)
+    patient.dilation_time = get_ist_now()
     
     # Update queue status
     queue_entry = db.query(Queue).filter(
@@ -182,7 +211,7 @@ async def dilate_patient(
     
     if queue_entry:
         queue_entry.status = PatientStatus.DILATED
-        queue_entry.updated_at = datetime.now(ist)
+        queue_entry.updated_at = get_ist_now()
     
     # Log patient flow
     flow_entry = PatientFlow(
@@ -218,7 +247,7 @@ async def return_dilated_patient(
     
     # Check if dilation time has passed (30-40 minutes)
     # if patient.dilation_time:
-    #     time_since_dilation = datetime.now(ist) - patient.dilation_time
+    #     time_since_dilation = get_ist_now() - patient.dilation_time
     #     if time_since_dilation < timedelta(minutes=30):
     #         remaining_time = 30 - int(time_since_dilation.total_seconds() / 60)
     #         raise HTTPException(
@@ -238,7 +267,7 @@ async def return_dilated_patient(
     
     if queue_entry:
         queue_entry.status = PatientStatus.PENDING
-        queue_entry.updated_at = datetime.now(ist)
+        queue_entry.updated_at = get_ist_now()
     
     # Log patient flow
     flow_entry = PatientFlow(
@@ -260,6 +289,148 @@ async def return_dilated_patient(
     
     return {"message": f"Patient {patient.token_number} returned from dilation"}
 
+@router.post("/{opd_type}/send-back-to-queue/{patient_id}")
+async def send_back_to_queue(
+    opd_type: str,
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.NURSING))
+):
+    """Send a patient who was accidentally called back to the queue"""
+    # Validate OPD exists and is active
+    opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
+    if not opd:
+        raise HTTPException(status_code=404, detail="OPD not found or inactive")
+    
+    # Get the patient
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Get the queue entry
+    queue_entry = db.query(Queue).filter(
+        Queue.patient_id == patient_id,
+        Queue.opd_type == opd_type
+    ).first()
+    
+    if not queue_entry:
+        raise HTTPException(status_code=404, detail="Patient not in this OPD queue")
+    
+    # Check if patient is currently IN_OPD
+    if queue_entry.status != PatientStatus.IN_OPD:
+        raise HTTPException(status_code=400, detail=f"Patient is not currently in OPD (status: {queue_entry.status})")
+    
+    # Send back to queue - set status to PENDING
+    queue_entry.status = PatientStatus.PENDING
+    queue_entry.updated_at = get_ist_now()
+    
+    # Update patient status only if they're not referred
+    if patient.current_status != PatientStatus.REFERRED:
+        patient.current_status = PatientStatus.PENDING
+    
+    # Log patient flow
+    flow_entry = PatientFlow(
+        patient_id=patient_id,
+        from_room=f"opd_{opd_type}",
+        to_room="waiting_area",
+        status=PatientStatus.PENDING,
+        notes="Patient accidentally called - sent back to queue"
+    )
+    db.add(flow_entry)
+    db.commit()
+    
+    # Broadcast updates
+    await broadcast_queue_update(opd_type, db)
+    await broadcast_patient_status_update(patient_id, PatientStatus.PENDING, db)
+    await broadcast_display_update()
+    
+    return {
+        "message": f"Patient {patient.token_number} sent back to queue",
+        "patient": {
+            "id": patient.id,
+            "token_number": patient.token_number,
+            "name": patient.name
+        }
+    }
+
+@router.post("/{opd_type}/call-out-of-order/{patient_id}")
+async def call_out_of_order(
+    opd_type: str,
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.NURSING))
+):
+    """Call a specific patient out of order (emergency or special case)"""
+    # Validate OPD exists and is active
+    opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
+    if not opd:
+        raise HTTPException(status_code=404, detail="OPD not found or inactive")
+    
+    # Get the patient
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Get the queue entry
+    queue_entry = db.query(Queue).filter(
+        Queue.patient_id == patient_id,
+        Queue.opd_type == opd_type
+    ).first()
+    
+    if not queue_entry:
+        raise HTTPException(status_code=404, detail="Patient not in this OPD queue")
+    
+    # Check if patient is currently PENDING or REFERRED
+    if queue_entry.status not in [PatientStatus.PENDING, PatientStatus.REFERRED, PatientStatus.DILATED]:
+        raise HTTPException(status_code=400, detail=f"Patient cannot be called (status: {queue_entry.status})")
+    
+    # Check if there's already a patient in OPD
+    current_in_opd = db.query(Queue).filter(
+        Queue.opd_type == opd_type,
+        Queue.status == PatientStatus.IN_OPD
+    ).first()
+    
+    if current_in_opd:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Another patient ({current_in_opd.patient.token_number}) is currently in OPD. Please complete or send them back first."
+        )
+    
+    # Call the patient out of order
+    queue_entry.status = PatientStatus.IN_OPD
+    queue_entry.updated_at = get_ist_now()
+    
+    # Update patient status and room
+    patient.current_room = f"opd_{opd_type}"
+    if patient.current_status != PatientStatus.REFERRED:
+        patient.current_status = PatientStatus.IN_OPD
+    
+    # Log patient flow
+    flow_entry = PatientFlow(
+        patient_id=patient_id,
+        from_room="waiting_area",
+        to_room=f"opd_{opd_type}",
+        status=PatientStatus.IN_OPD,
+        notes="Patient called out of order"
+    )
+    db.add(flow_entry)
+    db.commit()
+    
+    # Broadcast updates
+    await broadcast_queue_update(opd_type, db)
+    await broadcast_patient_status_update(patient_id, PatientStatus.IN_OPD, db)
+    await broadcast_display_update()
+    
+    return {
+        "message": f"Patient {patient.token_number} called out of order",
+        "patient": {
+            "id": patient.id,
+            "token_number": patient.token_number,
+            "name": patient.name,
+            "position": queue_entry.position
+        }
+    }
+
 @router.get("/{opd_type}/stats", response_model=OPDStats)
 async def get_opd_stats(
     opd_type: str,
@@ -271,7 +442,7 @@ async def get_opd_stats(
     if not opd:
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
     
-    today = datetime.now(ist).date()
+    today = get_ist_now().date()
     
     # Get queue statistics
     total_patients = db.query(Queue).filter(Queue.opd_type == opd_type).count()

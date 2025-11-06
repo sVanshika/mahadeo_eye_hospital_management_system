@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional
-from database_sqlite import get_db, Patient, OPD
+from database_sqlite import get_db, Patient, OPD, get_ist_now
 from auth import get_current_active_user, User, require_role, UserRole
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from printing import printer_manager
 from pydantic import BaseModel
 import pytz
@@ -52,8 +55,7 @@ async def print_opd_slip(
     # Calculate estimated wait time (simplified)
     estimated_wait = None
     if patient.registration_time:
-        from datetime import datetime
-        wait_minutes = int((datetime.now(ist) - patient.registration_time).total_seconds() / 60)
+        wait_minutes = int((get_ist_now() - patient.registration_time).total_seconds() / 60)
         estimated_wait = max(0, wait_minutes)
     
     success = printer_manager.print_opd_slip(

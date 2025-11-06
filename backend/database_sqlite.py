@@ -5,8 +5,16 @@ from datetime import datetime
 import enum
 import os
 from dotenv import load_dotenv
+import pytz
 
 load_dotenv()
+
+# IST timezone
+ist = pytz.timezone('Asia/Kolkata')
+
+# Helper function to get current IST time (naive for SQLite compatibility)
+def get_ist_now():
+    return datetime.now(ist).replace(tzinfo=None)  # Return naive datetime in IST
 
 # Database URL - Using SQLite for easy setup
 DATABASE_URL = "sqlite:///./eye_hospital.db"
@@ -42,7 +50,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_ist_now)
 
 class OPD(Base):
     __tablename__ = "opds"
@@ -52,8 +60,8 @@ class OPD(Base):
     opd_name = Column(String, nullable=False)  # e.g., "OPD 1", "General OPD"
     description = Column(String)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_ist_now)
+    updated_at = Column(DateTime, default=get_ist_now)
 
 class Room(Base):
     __tablename__ = "rooms"
@@ -63,17 +71,18 @@ class Room(Base):
     room_name = Column(String, nullable=False)
     room_type = Column(String, nullable=False)  # vision, opd, refraction, retina, biometry
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_ist_now)
 
 class Patient(Base):
     __tablename__ = "patients"
     
     id = Column(Integer, primary_key=True, index=True)
+    registration_number = Column(String, index=True)  # Hospital's original software registration number
     token_number = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
-    age = Column(Integer, nullable=False)
+    age = Column(Integer)  # Made optional
     phone = Column(String)
-    registration_time = Column(DateTime, default=datetime.utcnow)
+    registration_time = Column(DateTime, default=get_ist_now)
     current_status = Column(SQLEnum(PatientStatus), default=PatientStatus.PENDING)
     allocated_opd = Column(String)  # Now stores OPD code as string
     current_room = Column(String)
@@ -91,8 +100,8 @@ class Queue(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
     position = Column(Integer, nullable=False)
     status = Column(SQLEnum(PatientStatus), default=PatientStatus.PENDING)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_ist_now)
+    updated_at = Column(DateTime, default=get_ist_now)
     
     patient = relationship("Patient", back_populates="queue_entries")
 
@@ -107,7 +116,7 @@ class PatientFlow(Base):
     from_room = Column(String)
     to_room = Column(String)
     status = Column(SQLEnum(PatientStatus), nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=get_ist_now)
     notes = Column(String)
     
     patient = relationship("Patient")

@@ -1,12 +1,26 @@
-from escpos.printer import Network
-from escpos.printer import Usb
+try:
+    from escpos.printer import Network, Usb
+    ESCPOS_AVAILABLE = True
+    print("✓ Escpos printer library loaded successfully")
+except ImportError as e:
+    print(f"Warning: escpos library not available: {e}")
+    ESCPOS_AVAILABLE = False
+    Network = None
+    Usb = None
+
 from PIL import Image, ImageDraw, ImageFont
 import io
 import os
 from typing import Optional
 import logging
 import pytz
+from datetime import datetime
+
 ist = pytz.timezone('Asia/Kolkata')
+
+# Helper function to get current IST time (naive for database compatibility)
+def get_ist_now():
+    return datetime.now(ist).replace(tzinfo=None)
 
 logger = logging.getLogger(__name__)
 
@@ -19,18 +33,25 @@ class PrinterManager:
 
     def _initialize_printer(self):
         """Initialize the printer connection"""
+        if not ESCPOS_AVAILABLE:
+            logger.warning("Escpos library not available, printer functionality disabled")
+            self.printer = None
+            return
+            
         try:
             # Try network printer first
             self.printer = Network(self.printer_ip, port=self.printer_port)
-            logger.info(f"Connected to network printer at {self.printer_ip}:{self.printer_port}")
+            logger.info(f"✓ Connected to network printer at {self.printer_ip}:{self.printer_port}")
         except Exception as e:
             logger.warning(f"Failed to connect to network printer: {e}")
+            logger.info("Note: If you don't have a physical printer, this is expected. Printing functions will return False.")
             try:
                 # Fallback to USB printer
                 self.printer = Usb()
-                logger.info("Connected to USB printer")
+                logger.info("✓ Connected to USB printer")
             except Exception as e2:
-                logger.error(f"Failed to connect to USB printer: {e2}")
+                logger.warning(f"Failed to connect to USB printer: {e2}")
+                logger.info("Printer not connected. Print functions will be available but will fail without a physical printer.")
                 self.printer = None
 
     def print_token(self, token_number: str, patient_name: str, opd_number: Optional[str] = None) -> bool:
@@ -114,8 +135,7 @@ class PrinterManager:
             draw.text((width//2, 190), f"OPD: {opd_number.upper()}", fill='black', font=normal_font, anchor="mm")
         
         # Draw timestamp
-        from datetime import datetime
-        timestamp = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
         draw.text((width//2, 250), f"Time: {timestamp}", fill='black', font=small_font, anchor="mm")
         
         # Draw footer

@@ -33,6 +33,8 @@ import {
   PersonAdd,
   CheckCircle,
   Schedule,
+  Undo,
+  SkipNext,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -310,6 +312,44 @@ const OPDManagement = () => {
     }
   };
 
+  // New handler: Send back to queue
+  const handleSendBackToQueue = async (patient) => {
+    if (!window.confirm(`Send ${patient.patient_name} (${patient.token_number}) back to queue?`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiClient.post(`/opd/${selectedOpd}/send-back-to-queue/${patient.patient_id}`);
+      showSuccess(`Patient ${patient.token_number} sent back to queue`);
+      fetchQueueData();
+      fetchStats();
+    } catch (error) {
+      showError(error.response?.data?.detail || 'Failed to send patient back to queue');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // New handler: Call out of order
+  const handleCallOutOfOrder = async (patient) => {
+    if (!window.confirm(`Call ${patient.patient_name} (${patient.token_number}) out of order?`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiClient.post(`/opd/${selectedOpd}/call-out-of-order/${patient.patient_id}`);
+      showSuccess(`Patient ${patient.token_number} called out of order`);
+      fetchQueueData();
+      fetchStats();
+    } catch (error) {
+      showError(error.response?.data?.detail || 'Failed to call patient out of order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box sx={{ flexGrow: 1 }}>
       <Navbar 
@@ -431,6 +471,38 @@ const OPDManagement = () => {
                               size="small"
                             />
                             
+                            {/* Send Back to Queue Button - for patients currently in OPD */}
+                            {patient.status === 'in' && (
+                              <Tooltip title="Send patient back to queue (if called by mistake)">
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  color="warning"
+                                  startIcon={<Undo />}
+                                  onClick={() => handleSendBackToQueue(patient)}
+                                  disabled={loading}
+                                >
+                                  Send Back
+                                </Button>
+                              </Tooltip>
+                            )}
+
+                            {/* Call Out of Order Button - for pending/dilated patients */}
+                            {(patient.status === 'pending' || patient.status === 'dilated') && (
+                              <Tooltip title="Call this patient out of order (emergency/priority case)">
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  color="secondary"
+                                  startIcon={<SkipNext />}
+                                  onClick={() => handleCallOutOfOrder(patient)}
+                                  disabled={loading}
+                                >
+                                  Call Now
+                                </Button>
+                              </Tooltip>
+                            )}
+
                             {patient.status !== 'dilated' && (
                               <Button
                                   variant="outlined"

@@ -38,9 +38,8 @@ const PatientRegistration = () => {
   const { showSuccess, showError } = useNotification();
   const { activeOPDs } = useOPD();
   const [formData, setFormData] = useState({
+    registration_number: '',
     name: '',
-    age: '',
-    phone: '',
   });
   const [patients, setPatients] = useState([]);
   const [all_patients, setAllPatients] = useState([]);
@@ -48,6 +47,9 @@ const PatientRegistration = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [opdDialogOpen, setOpdDialogOpen] = useState(false);
   const [selectedOpd, setSelectedOpd] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   useEffect(() => {
     fetchPatients();
@@ -58,13 +60,30 @@ const PatientRegistration = () => {
       const response = await apiClient.get('/patients', { params: { latest: true } });
       setPatients(response.data);
 
-      const response_all_patients = await apiClient.get('/patients', { params: { latest: false } });
-      setAllPatients(response_all_patients.data);
-
+      fetchAllPatients();
     } catch (error) {
       console.error('Failed to fetch patients:', error);
     }
   };
+
+  const fetchAllPatients = async () => {
+    try {
+      const params = { latest: false };
+      if (searchTerm) params.search = searchTerm;
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+
+      const response = await apiClient.get('/patients', { params });
+      setAllPatients(response.data);
+    } catch (error) {
+      console.error('Failed to fetch all patients:', error);
+    }
+  };
+
+  // Fetch all patients when search/filter changes
+  useEffect(() => {
+    fetchAllPatients();
+  }, [searchTerm, dateFrom, dateTo]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -80,13 +99,12 @@ const PatientRegistration = () => {
 
     try {
       const response = await apiClient.post('/patients/register', {
+        registration_number: formData.registration_number || null,
         name: formData.name,
-        age: parseInt(formData.age),
-        phone: formData.phone || null,
       });
 
       showSuccess(`Patient registered successfully! Token: ${response.data.token_number}`);
-      setFormData({ name: '', age: '', phone: '' });
+      setFormData({ registration_number: '', name: '' });
       fetchPatients();
     } catch (error) {
       showError(error.response?.data?.detail || 'Registration failed');
@@ -161,33 +179,25 @@ const PatientRegistration = () => {
                 <Box component="form" onSubmit={handleSubmit}>
                   <TextField
                     margin="normal"
+                    fullWidth
+                    id="registration_number"
+                    label="Registration Number (Optional)"
+                    name="registration_number"
+                    placeholder="Hospital's existing registration number"
+                    value={formData.registration_number}
+                    onChange={handleInputChange}
+                    helperText="Original hospital software registration number (if applicable)"
+                  />
+                  <TextField
+                    margin="normal"
                     required
                     fullWidth
                     id="name"
-                    label="Patient Name"
+                    label="Full Name"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
-                  />
-                  <TextField
-                    margin="normal"
-                    required
-                    fullWidth
-                    id="age"
-                    label="Age"
-                    name="age"
-                    type="number"
-                    value={formData.age}
-                    onChange={handleInputChange}
-                  />
-                  <TextField
-                    margin="normal"
-                    fullWidth
-                    id="phone"
-                    label="Phone Number"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
+                    autoFocus
                   />
                   <Button
                     type="submit"
@@ -257,45 +267,112 @@ const PatientRegistration = () => {
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  All Patients
+                  All Patients ({all_patients.length} found)
                 </Typography>
-                <List>
-                  {all_patients.map((patient) => (
-                    <ListItem key={patient.id} divider>
-                      <ListItemText
-                        primary={`${patient.token_number} - ${patient.name}`}
-                        secondary={`Age: ${patient.age} | Phone: ${patient.phone || 'N/A'} | Registered: ${new Date(patient.registration_time).toLocaleString()}`}
-                      />
-                      <ListItemSecondaryAction>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Chip
-                            label={getStatusLabel(patient.current_status)}
-                            color={getStatusColor(patient.current_status)}
-                            size="small"
-                          />
-                              {patient.allocated_opd && (
-                                <Chip
-                                  label={patient.allocated_opd.toUpperCase()}
-                                  color="primary"
-                                  size="small"
+                
+                {/* Search and Filter Controls */}
+                <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <TextField
+                    label="Search"
+                    placeholder="Registration number, Token, or Name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    sx={{ flex: '1 1 300px', minWidth: '200px' }}
+                    size="small"
+                  />
+                  <TextField
+                    label="From Date"
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                    sx={{ width: '150px' }}
+                  />
+                  <TextField
+                    label="To Date"
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                    sx={{ width: '150px' }}
+                  />
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setDateFrom('');
+                      setDateTo('');
+                    }}
+                    size="small"
+                  >
+                    Clear Filters
+                  </Button>
+                </Box>
+
+                {/* Scrollable Table */}
+                <Box sx={{ maxHeight: '500px', overflow: 'auto' }}>
+                  <List>
+                    {all_patients.length === 0 && (
+                      <ListItem>
+                        <ListItemText primary="No patients found matching your search criteria" />
+                      </ListItem>
+                    )}
+                    {all_patients.map((patient) => (
+                      <ListItem key={patient.id} divider>
+                        <ListItemText
+                          primary={
+                            <Box>
+                              {patient.registration_number && (
+                                <Chip 
+                                  label={`Reg: ${patient.registration_number}`} 
+                                  size="small" 
+                                  sx={{ mr: 1, bgcolor: '#e3f2fd' }}
                                 />
                               )}
-                              {!patient.allocated_opd && patient.current_status !== 'completed' && (
-                                <Tooltip title="Allocate OPD" enterDelay={0} leaveDelay={0}>
-                                  <IconButton
-                                    edge="end"
-                                    onClick={() => handleAllocateOpd(patient)}
+                              <strong>{patient.token_number}</strong> - {patient.name}
+                            </Box>
+                          }
+                          secondary={
+                            <span>
+                              {patient.age ? `Age: ${patient.age} | ` : ''}
+                              {patient.phone ? `Phone: ${patient.phone} | ` : ''}
+                              Registered: {new Date(patient.registration_time).toLocaleString()}
+                            </span>
+                          }
+                        />
+                        <ListItemSecondaryAction>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Chip
+                              label={getStatusLabel(patient.current_status)}
+                              color={getStatusColor(patient.current_status)}
+                              size="small"
+                            />
+                                {patient.allocated_opd && (
+                                  <Chip
+                                    label={patient.allocated_opd.toUpperCase()}
                                     color="primary"
-                                  >
-                                    <PersonAdd />
-                                  </IconButton>
-                                </Tooltip>
-                          )}
-                        </Box>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-                </List>
+                                    size="small"
+                                  />
+                                )}
+                                {!patient.allocated_opd && patient.current_status !== 'completed' && (
+                                  <Tooltip title="Allocate OPD" enterDelay={0} leaveDelay={0}>
+                                    <IconButton
+                                      edge="end"
+                                      onClick={() => handleAllocateOpd(patient)}
+                                      color="primary"
+                                    >
+                                      <PersonAdd />
+                                    </IconButton>
+                                  </Tooltip>
+                            )}
+                          </Box>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
               </CardContent>
             </Card>
           </Grid>

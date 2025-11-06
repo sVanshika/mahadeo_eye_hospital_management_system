@@ -6,7 +6,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from database_sqlite import get_db, User, UserRole
+from database_sqlite import get_db, User, UserRole, get_ist_now
 import os
 from dotenv import load_dotenv
 
@@ -82,9 +82,9 @@ def get_password_hash(password):
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(ist) + expires_delta
+        expire = get_ist_now() + expires_delta
     else:
-        expire = datetime.now(ist) + timedelta(minutes=15)
+        expire = get_ist_now() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

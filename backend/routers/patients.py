@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow
+from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow, get_ist_now
 from auth import get_current_active_user, User, require_role, UserRole
 from websocket_manager import broadcast_queue_update, broadcast_patient_status_update, broadcast_display_update
 import asyncio
@@ -14,8 +14,9 @@ router = APIRouter()
 
 # Pydantic models
 class PatientCreate(BaseModel):
+    registration_number: Optional[str] = None  # Hospital's original software registration number
     name: str
-    age: int
+    age: Optional[int] = None  # Made optional
     phone: Optional[str] = None
 
 class PatientUpdate(BaseModel):
@@ -31,9 +32,10 @@ class PatientUpdate(BaseModel):
 
 class PatientResponse(BaseModel):
     id: int
+    registration_number: Optional[str]  # Hospital's original software registration number
     token_number: str
     name: str
-    age: int
+    age: Optional[int]
     phone: Optional[str]
     registration_time: datetime
     current_status: PatientStatus
@@ -84,7 +86,7 @@ class ReferredPatientResponse(BaseModel):
 
 # Helper function to generate token number
 def generate_token_number(db: Session) -> str:
-    today = datetime.now(ist).strftime("%Y%m%d")
+    today = get_ist_now().strftime("%Y%m%d")
     last_token = db.query(Patient).filter(
         Patient.token_number.like(f"{today}%")
     ).order_by(Patient.id.desc()).first()
@@ -108,11 +110,12 @@ async def register_patient(
     
     # Create patient
     db_patient = Patient(
+        registration_number=patient_data.registration_number,
         token_number=token_number,
         name=patient_data.name,
         age=patient_data.age,
         phone=patient_data.phone,
-        registration_time=datetime.now(ist)
+        registration_time=get_ist_now()
     )
     
     db.add(db_patient)
@@ -258,9 +261,9 @@ async def update_patient_status(
     # Handle special cases
     if status == PatientStatus.DILATED:
         patient.is_dilated = True
-        patient.dilation_time = datetime.now(ist)
+        patient.dilation_time = get_ist_now()
     elif status == PatientStatus.COMPLETED:
-        patient.completed_at = datetime.now(ist)
+        patient.completed_at = get_ist_now()
         # Remove from queue
         db.query(Queue).filter(
             Queue.patient_id == patient_id,
@@ -275,7 +278,7 @@ async def update_patient_status(
     
     if queue_entry:
         queue_entry.status = status
-        queue_entry.updated_at = datetime.now(ist)
+        queue_entry.updated_at = get_ist_now()
     
     # Log patient flow
     flow_entry = PatientFlow(
@@ -427,7 +430,7 @@ async def return_referred_patient(
         db.add(original_opd_queue_entry)
     else:
         original_opd_queue_entry.status = PatientStatus.PENDING
-        original_opd_queue_entry.updated_at = datetime.now(ist)
+        original_opd_queue_entry.updated_at = get_ist_now()
 
     # 3. Update Queue entry for the OPD the patient was referred TO (where patient is returning FROM)
     referred_to_opd_queue_entry = db.query(Queue).filter(
@@ -438,7 +441,7 @@ async def return_referred_patient(
     if referred_to_opd_queue_entry:
         # Mark as completed for this queue, as the patient is no longer being managed here.
         referred_to_opd_queue_entry.status = PatientStatus.COMPLETED 
-        referred_to_opd_queue_entry.updated_at = datetime.now(ist)
+        referred_to_opd_queue_entry.updated_at = get_ist_now()
     # If not found, it might have been processed/removed already, which is acceptable.
 
     # 4. Log patient flow
@@ -505,9 +508,12 @@ async def list_referred_patients(
 @router.get("/", response_model=List[PatientResponse])
 async def get_patients(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 1000,  # Increased limit for All Patients table
     status: Optional[PatientStatus] = None,
-    latest: Optional[bool] = Query(False), # New parameter to fetch latest patients
+    latest: Optional[bool] = Query(False),
+    search: Optional[str] = Query(None),  # Search by registration_number or name
+    date_from: Optional[str] = Query(None),  # Filter by date range - start date (YYYY-MM-DD)
+    date_to: Optional[str] = Query(None),  # Filter by date range - end date (YYYY-MM-DD)
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -515,9 +521,37 @@ async def get_patients(
     query = db.query(Patient)
     print("status", status)
     print("latest", latest)
+    print("search", search)
+    print("date_from", date_from, "date_to", date_to)
     
     if status:
         query = query.filter(Patient.current_status == status)
+    
+    # Search by registration number or name
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            (Patient.registration_number.ilike(search_term)) |
+            (Patient.name.ilike(search_term)) |
+            (Patient.token_number.ilike(search_term))
+        )
+    
+    # Filter by date range
+    if date_from:
+        try:
+            from_date = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.filter(Patient.registration_time >= from_date)
+        except ValueError:
+            pass  # Invalid date format, ignore filter
+    
+    if date_to:
+        try:
+            to_date = datetime.strptime(date_to, "%Y-%m-%d")
+            # Add 1 day and use < to include the entire end date
+            to_date_end = to_date + timedelta(days=1)
+            query = query.filter(Patient.registration_time < to_date_end)
+        except ValueError:
+            pass  # Invalid date format, ignore filter
     
     if latest:
         # If 'latest' is true, order by registration time descending and limit to 5
@@ -554,7 +588,7 @@ async def end_patient_visit(
     # Update patient status and details
     patient.current_status = PatientStatus.COMPLETED
     patient.status = PatientStatus.COMPLETED
-    patient.completed_at = datetime.now(ist)
+    patient.completed_at = get_ist_now()
     patient.current_room = None # Patient is no longer in any active room
     patient.allocated_opd = None # Patient is no longer allocated to an OPD
     patient.referred_from = None # Clear referral status

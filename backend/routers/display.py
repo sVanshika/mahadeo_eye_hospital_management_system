@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD
+from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, get_ist_now
 from auth import get_current_active_user, User
 import pytz
 ist = pytz.timezone('Asia/Kolkata')
@@ -49,7 +49,7 @@ async def get_opd_display_data(
     if current_patient_query:
         waiting_time = None
         if current_patient_query.patient.registration_time:
-            waiting_time = int((datetime.now(ist) - current_patient_query.patient.registration_time).total_seconds() / 60)
+            waiting_time = int((get_ist_now() - current_patient_query.patient.registration_time).total_seconds() / 60)
         
         current_patient = DisplayQueueItem(
             position=current_patient_query.position,
@@ -71,7 +71,7 @@ async def get_opd_display_data(
     for entry in next_patients_query:
         waiting_time = None
         if entry.patient.registration_time:
-            waiting_time = int((datetime.now(ist) - entry.patient.registration_time).total_seconds() / 60)
+            waiting_time = int((get_ist_now() - entry.patient.registration_time).total_seconds() / 60)
         
         next_patients.append(DisplayQueueItem(
             position=entry.position,
@@ -108,25 +108,31 @@ async def get_all_opds_display_data(
     db: Session = Depends(get_db)
 ):
     """Get display data for all OPDs - used by display screens"""
-    opds_data = []
-    
-    # Get all active OPDs from database
-    active_opds = db.query(OPD).filter(OPD.is_active == True).all()
-    for opd in active_opds:
-        opd_data = await get_opd_display_data(opd.opd_code, db)
-        opds_data.append(opd_data)
-    
-    return AllOPDsDisplayData(
-        opds=opds_data,
-        last_updated=datetime.now(ist)
-    )
+    try:
+        opds_data = []
+        
+        # Get all active OPDs from database
+        active_opds = db.query(OPD).filter(OPD.is_active == True).all()
+        for opd in active_opds:
+            opd_data = await get_opd_display_data(opd.opd_code, db)
+            opds_data.append(opd_data)
+        
+        return AllOPDsDisplayData(
+            opds=opds_data,
+            last_updated=get_ist_now()
+        )
+    except Exception as e:
+        print(f"Error in get_all_opds_display_data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error fetching display data: {str(e)}")
 
 @router.get("/")
 async def get_display_home(
     db: Session = Depends(get_db)
 ):
     """Main display route - shows all OPDs with current status"""
-    today = datetime.now(ist).date()
+    today = get_ist_now().date()
     
     # Get today's summary statistics
     total_patients_today = db.query(Patient).filter(
@@ -160,7 +166,7 @@ async def get_display_home(
     return {
         "hospital_name": "Eye Hospital",
         "date": today.isoformat(),
-        "time": datetime.now(ist).strftime("%H:%M:%S"),
+        "time": get_ist_now().strftime("%H:%M:%S"),
         "summary": {
             "total_patients_today": total_patients_today,
             "total_pending": total_pending,
@@ -169,7 +175,7 @@ async def get_display_home(
             "total_completed": total_completed
         },
         "opds": opds_data,
-        "last_updated": datetime.now(ist).isoformat()
+        "last_updated": get_ist_now().isoformat()
     }
 
 @router.get("/opd/{opd_type}/waiting-list")
@@ -189,7 +195,7 @@ async def get_waiting_list(
     for entry in waiting_patients:
         waiting_time = None
         if entry.patient.registration_time:
-            waiting_time = int((datetime.now(ist) - entry.patient.registration_time).total_seconds() / 60)
+            waiting_time = int((get_ist_now() - entry.patient.registration_time).total_seconds() / 60)
         
         waiting_list.append({
             "position": entry.position,
@@ -213,7 +219,7 @@ async def get_display_overview(
     db: Session = Depends(get_db)
 ):
     """Get overview statistics for display screens"""
-    today = datetime.now(ist).date()
+    today = get_ist_now().date()
     
     # Get today's statistics
     total_patients_today = db.query(Patient).filter(
@@ -239,7 +245,9 @@ async def get_display_overview(
     
     # Get OPD-wise counts
     opd_counts = {}
-    for opd_type in str:
+    active_opds = db.query(OPD).filter(OPD.is_active == True).all()
+    for opd in active_opds:
+        opd_type = opd.opd_code
         opd_pending = db.query(Queue).filter(
             Queue.opd_type == opd_type,
             Queue.status == PatientStatus.PENDING
@@ -272,5 +280,5 @@ async def get_display_overview(
             "total_completed": total_completed
         },
         "opd_counts": opd_counts,
-        "last_updated": datetime.now(ist).isoformat()
+        "last_updated": get_ist_now().isoformat()
     }
