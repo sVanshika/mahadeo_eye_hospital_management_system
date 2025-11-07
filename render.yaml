@@ -1,10 +1,11 @@
 services:
   - type: web
-    name: eye-hospital-backend
+    name: eye-hospital-fullstack
     env: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    buildCommand: |
+      cd frontend && npm install && npm run build && cd ..
+      cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port 10000
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.4

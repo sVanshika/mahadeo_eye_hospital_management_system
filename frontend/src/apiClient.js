@@ -5,12 +5,15 @@ import axios from 'axios';
 const runtimeUrl = typeof window !== 'undefined' ? window.__BACKEND_URL__ : undefined;
 const envUrl = process.env.REACT_APP_API_URL || process.env.APP_BACKEND_URL || process.env.VITE_BACKEND_URL;
 
-// Auto-detect: if on Render deployment, use production URL; otherwise localhost
+// Auto-detect: if NOT localhost, use Render backend; otherwise localhost
 const defaultUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-  ? window.location.origin  // Use same origin in production (frontend and backend on same domain)
+  ? 'https://mahadeo-eye-hospital-management-system.onrender.com'  // Render backend URL
   : 'http://localhost:8000';
 
 export const API_BASE_URL = (runtimeUrl || envUrl || defaultUrl).replace(/\/$/, '');
+
+// Debug log for production troubleshooting
+console.log('API_BASE_URL configured as:', API_BASE_URL);
 
 const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api`,
