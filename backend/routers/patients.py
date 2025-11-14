@@ -73,7 +73,7 @@ class ReferredPatientResponse(BaseModel):
     id: int
     token_number: str
     name: str
-    age: int
+    age: Optional[int]
     registration_time: datetime
     from_opd: Optional[str]
     to_opd: Optional[str]
@@ -103,35 +103,50 @@ def generate_token_number(db: Session) -> str:
 async def register_patient(
     patient_data: PatientCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.REGISTRATION))
+    current_user: User = Depends(get_current_active_user)
 ):
-    # Generate unique token number
-    token_number = generate_token_number(db)
-    
-    # Create patient
-    db_patient = Patient(
-        registration_number=patient_data.registration_number,
-        token_number=token_number,
-        name=patient_data.name,
-        age=patient_data.age,
-        phone=patient_data.phone,
-        registration_time=get_ist_now()
-    )
-    
-    db.add(db_patient)
-    db.commit()
-    db.refresh(db_patient)
-    
-    # Log patient flow
-    flow_entry = PatientFlow(
-        patient_id=db_patient.id,
-        to_room="registration",
-        status=PatientStatus.PENDING
-    )
-    db.add(flow_entry)
-    db.commit()
-    
-    return db_patient
+    try:
+        print(f"=== REGISTRATION REQUEST ===")
+        print(f"User: {current_user.username} (Role: {current_user.role})")
+        print(f"Data: {patient_data}")
+        
+        # Generate unique token number
+        token_number = generate_token_number(db)
+        print(f"Generated token: {token_number}")
+        
+        # Create patient
+        db_patient = Patient(
+            registration_number=patient_data.registration_number,
+            token_number=token_number,
+            name=patient_data.name,
+            age=patient_data.age,
+            phone=patient_data.phone,
+            registration_time=get_ist_now()
+        )
+        
+        db.add(db_patient)
+        db.commit()
+        db.refresh(db_patient)
+        print(f"Patient created: {db_patient.id} - {db_patient.name}")
+        
+        # Log patient flow
+        flow_entry = PatientFlow(
+            patient_id=db_patient.id,
+            to_room="registration",
+            status=PatientStatus.PENDING
+        )
+        db.add(flow_entry)
+        db.commit()
+        
+        print(f"=== REGISTRATION SUCCESS ===")
+        return db_patient
+    except Exception as e:
+        print(f"=== REGISTRATION ERROR ===")
+        print(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 # Place static route BEFORE any dynamic /{patient_id} routes to avoid conflicts
 @router.get("/referred", response_model=List[ReferredPatientResponse])

@@ -98,16 +98,30 @@ const PatientRegistration = () => {
     setLoading(true);
 
     try {
-      const response = await apiClient.post('/patients/register', {
+      console.log('=== FRONTEND: Submitting registration ===');
+      console.log('Form data:', formData);
+      
+      const payload = {
         registration_number: formData.registration_number || null,
         name: formData.name,
-      });
+        age: null,
+        phone: null,
+      };
+      console.log('Payload:', payload);
+      
+      const response = await apiClient.post('/patients/register', payload);
+      console.log('Response:', response.data);
 
       showSuccess(`Patient registered successfully! Token: ${response.data.token_number}`);
       setFormData({ registration_number: '', name: '' });
       fetchPatients();
     } catch (error) {
-      showError(error.response?.data?.detail || 'Registration failed');
+      console.error('=== FRONTEND: Registration error ===');
+      console.error('Error:', error);
+      console.error('Response:', error.response);
+      
+      const errorMessage = error.response?.data?.detail || error.message || 'Registration failed';
+      showError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -226,7 +240,7 @@ const PatientRegistration = () => {
                     <ListItem key={patient.id} divider>
                       <ListItemText
                         primary={`${patient.token_number} - ${patient.name}`}
-                        secondary={`Age: ${patient.age} | Status: ${getStatusLabel(patient.current_status)}`}
+                        secondary={`${patient.age ? `Age: ${patient.age} | ` : ''}Status: ${getStatusLabel(patient.current_status)}`}
                       />
                       <ListItemSecondaryAction>
                         <Box display="flex" alignItems="center" gap={1}>
