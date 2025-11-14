@@ -103,12 +103,18 @@ const OPDManagement = () => {
       return;
     }
     try {
-      console.log(`Fetching queue data for OPD: ${selectedOpd}`);
+      console.log(`=== FETCHING QUEUE FOR OPD: ${selectedOpd} ===`);
       const response = await apiClient.get(`/opd/${selectedOpd}/queue`);
+      console.log(`Queue API Response:`, response);
+      console.log(`Queue data received:`, response.data);
+      console.log(`Number of patients in queue:`, response.data?.length || 0);
       setQueue(response.data);
-      console.log(`\n\nQueue data:`, response.data);
+      console.log(`Queue state updated. Current queue:`, response.data);
     } catch (error) {
-      console.error('Failed to fetch queue:', error);
+      console.error('=== QUEUE FETCH ERROR ===');
+      console.error('Error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error message:', error.message);
     }
   };
 
@@ -139,10 +145,18 @@ const OPDManagement = () => {
         apiClient.get(`/patients/referred`, { params: { from_opd: selectedOpd } }),
         apiClient.get(`/patients/referred`, { params: { to_opd: selectedOpd } })
       ]);
-      setReferredFromHere(fromResp.data || []);
-      setReferredToHere(toResp.data || []);
+      // Ensure data is an array
+      const fromData = Array.isArray(fromResp.data) ? fromResp.data : [];
+      const toData = Array.isArray(toResp.data) ? toResp.data : [];
+      console.log('Referred FROM data:', fromData);
+      console.log('Referred TO data:', toData);
+      setReferredFromHere(fromData);
+      setReferredToHere(toData);
     } catch (error) {
       console.error('Failed to fetch referred patients:', error);
+      console.error('Error response:', error.response);
+      setReferredFromHere([]);
+      setReferredToHere([]);
     }
   };
 
@@ -221,7 +235,8 @@ const OPDManagement = () => {
         showSuccess(`Patient ${patient.token_number} marked for dilation`);
       } else if (type === 'refer') {
         const targetOpd = actionDialog.targetOpd;
-        const remarks = actionDialog.remarks
+        const remarks = actionDialog.remarks || '';
+        console.log('Referring patient:', { patient_id: patient.patient_id, to_opd: targetOpd, remarks });
         await apiClient.post(`/patients/${patient.patient_id}/refer`, {
           to_opd: targetOpd,
           remarks: remarks
@@ -241,7 +256,19 @@ const OPDManagement = () => {
       fetchStats();
       fetchReferred();
     } catch (error) {
-      showError(error.response?.data?.detail || 'Action failed');
+      console.error('Action error:', error);
+      console.error('Error response:', error.response);
+      // Handle validation errors from Pydantic
+      let errorMessage = 'Action failed';
+      if (error.response?.data?.detail) {
+        if (Array.isArray(error.response.data.detail)) {
+          // Pydantic validation error
+          errorMessage = error.response.data.detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+        } else if (typeof error.response.data.detail === 'string') {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      showError(errorMessage);
     } finally {
       setLoading(false);
     }

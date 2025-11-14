@@ -1,9 +1,7 @@
 try:
     from escpos.printer import Network, Usb
     ESCPOS_AVAILABLE = True
-    print("✓ Escpos printer library loaded successfully")
 except ImportError as e:
-    print(f"Warning: escpos library not available: {e}")
     ESCPOS_AVAILABLE = False
     Network = None
     Usb = None
@@ -32,27 +30,19 @@ class PrinterManager:
         self._initialize_printer()
 
     def _initialize_printer(self):
-        """Initialize the printer connection"""
+        """Initialize the printer connection - fails silently if no printer available"""
         if not ESCPOS_AVAILABLE:
-            logger.warning("Escpos library not available, printer functionality disabled")
+            # Silently skip if library not available
             self.printer = None
             return
             
         try:
-            # Try network printer first
-            self.printer = Network(self.printer_ip, port=self.printer_port)
-            logger.info(f"✓ Connected to network printer at {self.printer_ip}:{self.printer_port}")
-        except Exception as e:
-            logger.warning(f"Failed to connect to network printer: {e}")
-            logger.info("Note: If you don't have a physical printer, this is expected. Printing functions will return False.")
-            try:
-                # Fallback to USB printer
-                self.printer = Usb()
-                logger.info("✓ Connected to USB printer")
-            except Exception as e2:
-                logger.warning(f"Failed to connect to USB printer: {e2}")
-                logger.info("Printer not connected. Print functions will be available but will fail without a physical printer.")
-                self.printer = None
+            # Try network printer first (with very short timeout to fail fast)
+            self.printer = Network(self.printer_ip, port=self.printer_port, timeout=1)
+            logger.info(f"Connected to network printer at {self.printer_ip}:{self.printer_port}")
+        except:
+            # Silently fail - printer is optional
+            self.printer = None
 
     def print_token(self, token_number: str, patient_name: str, opd_number: Optional[str] = None) -> bool:
         """Print a patient token"""

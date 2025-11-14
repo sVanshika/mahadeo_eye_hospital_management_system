@@ -67,7 +67,7 @@ class AllocateOPDRequest(BaseModel):
 
 class ReferPatientRequest(BaseModel):
     to_opd: str
-    remarks: str
+    remarks: Optional[str] = None
 
 class ReferredPatientResponse(BaseModel):
     id: int
@@ -169,27 +169,32 @@ async def list_referred_patients(
 
     result = []
     for p in patients:
-        # Get current queue status in the destination OPD
-        current_queue_status = None
-        if p.referred_to:
-            queue_entry = db.query(Queue).filter(
-                Queue.patient_id == p.id,
-                Queue.opd_type == p.referred_to
-            ).first()
-            if queue_entry:
-                current_queue_status = queue_entry.status.value
+        try:
+            # Get current queue status in the destination OPD
+            current_queue_status = None
+            if p.referred_to:
+                queue_entry = db.query(Queue).filter(
+                    Queue.patient_id == p.id,
+                    Queue.opd_type == p.referred_to
+                ).first()
+                if queue_entry:
+                    current_queue_status = queue_entry.status.value if queue_entry.status else None
 
-        result.append(ReferredPatientResponse(
-            id=p.id,
-            token_number=p.token_number,
-            name=p.name,
-            age=p.age,
-            registration_time=p.registration_time,
-            from_opd=p.referred_from,
-            to_opd=p.referred_to,
-            status=p.current_status.value,
-            current_queue_status=current_queue_status
-        ))
+            result.append(ReferredPatientResponse(
+                id=p.id,
+                token_number=p.token_number,
+                name=p.name,
+                age=p.age,
+                registration_time=p.registration_time,
+                from_opd=p.referred_from,
+                to_opd=p.referred_to,
+                status=p.current_status.value if p.current_status else "unknown",
+                current_queue_status=current_queue_status
+            ))
+        except Exception as e:
+            print(f"Error creating ReferredPatientResponse for patient {p.id}: {e}")
+            import traceback
+            traceback.print_exc()
     
     return result
 
@@ -198,7 +203,7 @@ async def allocate_opd(
     patient_id: int,
     payload: AllocateOPDRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.REGISTRATION))
+    current_user: User = Depends(get_current_active_user)
 ):
     print("patients.py: allocate_opd")
     opd_type = payload.opd_type
@@ -320,17 +325,27 @@ async def refer_patient(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
-    to_opd = payload.to_opd
+    print(f"\n=== REFER PATIENT {patient_id} ===")
+    print(f"Payload: {payload}")
+    
+    to_opd = payload.to_opd.lower() if payload.to_opd else None
     remarks = payload.remarks
+    
+    if not to_opd:
+        raise HTTPException(status_code=400, detail="Target OPD is required")
     
     # Validate target OPD exists and is active
     target_opd = db.query(OPD).filter(OPD.opd_code == to_opd, OPD.is_active == True).first()
     if not target_opd:
-        raise HTTPException(status_code=404, detail="Target OPD not found or inactive")
+        print(f"ERROR: Target OPD '{to_opd}' not found or inactive")
+        raise HTTPException(status_code=404, detail=f"Target OPD '{to_opd}' not found or inactive")
     
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
+        print(f"ERROR: Patient {patient_id} not found")
         raise HTTPException(status_code=404, detail="Patient not found")
+    
+    print(f"Referring patient {patient.name} (Token: {patient.token_number}) to {to_opd}")
     
     from_opd = patient.allocated_opd
     patient.referred_from = from_opd if from_opd else None

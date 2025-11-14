@@ -22,10 +22,10 @@ class QueueResponse(BaseModel):
     registration_time: datetime
     is_dilated: bool
     dilation_time: Optional[datetime] = None
-    age: int
-    phone: Optional[str]
+    age: Optional[int] = None
+    phone: Optional[str] = None
     is_referred: bool
-    referred_from: Optional[str]
+    referred_from: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -47,23 +47,43 @@ async def get_opd_queue(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    # Convert to lowercase to match database
+    opd_type = opd_type.lower()
+    print(f"\n{'='*60}")
+    print(f"=== GET QUEUE FOR OPD: {opd_type} ===")
+    print(f"!!! CODE VERSION: 2024-11-14-v3 !!!")
+    print(f"{'='*60}")
+    
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
     if not opd:
+        print(f"ERROR: OPD {opd_type} not found or inactive")
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
+    print(f"✓ OPD found: {opd.opd_code} - {opd.opd_name}")
     
-    queue_entries = db.query(Queue).join(Patient).filter(
-        Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED])
-    ).filter(
-        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-        # Allow: fresh patients (no referral), patients referred TO this OPD, patients referred FROM this OPD back to this OPD
-        ~(
-            (Patient.referred_from == opd_type) & 
-            (Patient.referred_to != opd_type) & 
-            (Patient.referred_to.isnot(None))
-        )
-    ).order_by(Queue.position).all()
+    # First, let's see ALL queue entries for this OPD
+    all_queue_entries = db.query(Queue).filter(Queue.opd_type == opd_type).all()
+    print(f"✓ Total queue entries for {opd_type}: {len(all_queue_entries)}")
+    for entry in all_queue_entries:
+        print(f"  - Patient ID: {entry.patient_id}, Status: {entry.status}, Position: {entry.position}")
+    
+    try:
+        # Check what statuses we're looking for
+        print(f"Looking for statuses: {[PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]}")
+        
+        queue_entries = db.query(Queue).join(Patient).filter(
+            Queue.opd_type == opd_type,
+            Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED])
+        ).order_by(Queue.position).all()
+        
+        print(f"Found {len(queue_entries)} queue entries after filtering")
+        for entry in queue_entries:
+            print(f"  Matched: Patient {entry.patient_id} - {entry.patient.name}, Status: {entry.status}")
+    except Exception as e:
+        print(f"ERROR querying queue entries: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
     
     # Sort referred patients by total waiting time (descending - longest waiting first)
     # Separate referred and non-referred patients
@@ -76,33 +96,40 @@ async def get_opd_queue(
     # Combine: other patients in their original order, then referred patients sorted by waiting time
     queue_entries = other_patients + referred_patients
 
-    print("**** get_opd_queue ****")
-    for entry in queue_entries:
-        print(entry.patient.name, entry.status)
-        if entry.status == PatientStatus.REFERRED:
-            # When a patient is referred TO this OPD, they should appear as PENDING in its queue
-            # for active management. This is an in-memory modification for display purposes
-            # in this specific queue view, not a database update.
-            entry.status = PatientStatus.PENDING
-    
+    print("**** Building queue response ****")
     queue_data = []
     for entry in queue_entries:
-        queue_data.append(QueueResponse(
-            id=entry.id,
-            patient_id=entry.patient_id,
-            token_number=entry.patient.token_number,
-            patient_name=entry.patient.name,
-            position=entry.position,
-            status=entry.status,
-            registration_time=entry.patient.registration_time,
-            is_dilated=entry.patient.is_dilated,
-            dilation_time=entry.patient.dilation_time,
-            age=entry.patient.age,
-            phone=entry.patient.phone,
-            is_referred=(entry.patient.current_status == PatientStatus.REFERRED),
-            referred_from=entry.patient.referred_from
-        ))
+        try:
+            print(f"Processing: {entry.patient.name}, Status: {entry.status}")
+            
+            # Convert status for referred patients
+            display_status = entry.status
+            if entry.status == PatientStatus.REFERRED:
+                display_status = PatientStatus.PENDING
+            
+            queue_item = QueueResponse(
+                id=entry.id,
+                patient_id=entry.patient_id,
+                token_number=entry.patient.token_number,
+                patient_name=entry.patient.name,
+                position=entry.position,
+                status=display_status,
+                registration_time=entry.patient.registration_time,
+                is_dilated=entry.patient.is_dilated if entry.patient.is_dilated is not None else False,
+                dilation_time=entry.patient.dilation_time,
+                age=entry.patient.age,
+                phone=entry.patient.phone,
+                is_referred=(entry.patient.current_status == PatientStatus.REFERRED),
+                referred_from=entry.patient.referred_from
+            )
+            queue_data.append(queue_item)
+            print(f"  ✓ Added to queue response")
+        except Exception as e:
+            print(f"  ✗ ERROR creating response for {entry.patient.name}: {e}")
+            import traceback
+            traceback.print_exc()
     
+    print(f"Returning {len(queue_data)} patients in queue")
     return queue_data
 
 @router.post("/{opd_type}/call-next")
@@ -111,6 +138,7 @@ async def call_next_patient(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
+    opd_type = opd_type.lower()
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
     if not opd:
@@ -191,6 +219,7 @@ async def dilate_patient(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
+    opd_type = opd_type.lower()
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -238,6 +267,7 @@ async def return_dilated_patient(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
+    opd_type = opd_type.lower()
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -296,6 +326,7 @@ async def send_back_to_queue(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
+    opd_type = opd_type.lower()
     """Send a patient who was accidentally called back to the queue"""
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
@@ -360,6 +391,7 @@ async def call_out_of_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
+    opd_type = opd_type.lower()
     """Call a specific patient out of order (emergency or special case)"""
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
@@ -437,6 +469,7 @@ async def get_opd_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    opd_type = opd_type.lower()
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
     if not opd:
