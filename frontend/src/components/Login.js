@@ -55,8 +55,8 @@ const Login = () => {
               alignItems: 'center',
             }}
           >
-            <Typography component="h1" variant="h4" gutterBottom>
-              Eye Hospital
+            <Typography component="h1" variant="h4" gutterBottom align="center">
+              Mahadeo Singhi Eye and Multispeciality Hospital
             </Typography>
             <Typography component="h2" variant="h6" color="text.secondary" gutterBottom>
               Patient Management System

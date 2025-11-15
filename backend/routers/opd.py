@@ -74,6 +74,14 @@ async def get_opd_queue(
         queue_entries = db.query(Queue).join(Patient).filter(
             Queue.opd_type == opd_type,
             Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED])
+        ).filter(
+        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+        # Allow: fresh patients (no referral), patients referred TO this OPD, patients referred FROM this OPD back to this OPD
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
         ).order_by(Queue.position).all()
         
         print(f"Found {len(queue_entries)} queue entries after filtering")
@@ -231,6 +239,7 @@ async def dilate_patient(
     patient.current_status = PatientStatus.DILATED
     patient.is_dilated = True
     patient.dilation_time = get_ist_now()
+    patient.dilation_flag = True
     
     # Update queue status
     queue_entry = db.query(Queue).filter(

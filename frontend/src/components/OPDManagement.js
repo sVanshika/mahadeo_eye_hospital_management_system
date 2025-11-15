@@ -62,11 +62,14 @@ const OPDManagement = () => {
   const [selectedPatientForReturn, setSelectedPatientForReturn] = useState(null);
   const [returnRemarks, setReturnRemarks] = useState('');
   const [returnLoading, setReturnLoading] = useState(false);
+  const [hasBeenDilated, setHasBeenDilated] = useState({}); // Track if patients have ever been dilated
 
   // Set default OPD when activeOPDs are loaded
   useEffect(() => {
-    console.log('activeOPDs changed:', activeOPDs);
-    console.log('selectedOpd:', selectedOpd);
+    // console.log('activeOPDs changed:', activeOPDs);
+    // console.log('selectedOpd:', selectedOpd);
+    console.log("hasBeenDilated =", hasBeenDilated);
+
     if (activeOPDs.length > 0 && !selectedOpd) {
       console.log('Setting default OPD to:', activeOPDs[0].opd_code);
       setSelectedOpd(activeOPDs[0].opd_code);
@@ -99,17 +102,17 @@ const OPDManagement = () => {
 
   const fetchQueueData = async () => {
     if (!selectedOpd) {
-      console.log('No selectedOpd, skipping fetchQueueData');
+      //console.log('No selectedOpd, skipping fetchQueueData');
       return;
     }
     try {
-      console.log(`=== FETCHING QUEUE FOR OPD: ${selectedOpd} ===`);
+      //console.log(`=== FETCHING QUEUE FOR OPD: ${selectedOpd} ===`);
       const response = await apiClient.get(`/opd/${selectedOpd}/queue`);
-      console.log(`Queue API Response:`, response);
-      console.log(`Queue data received:`, response.data);
-      console.log(`Number of patients in queue:`, response.data?.length || 0);
+      //console.log(`Queue API Response:`, response);
+      //console.log(`Queue data received:`, response.data);
+      //console.log(`Number of patients in queue:`, response.data?.length || 0);
       setQueue(response.data);
-      console.log(`Queue state updated. Current queue:`, response.data);
+      //console.log(`Queue state updated. Current queue:`, response.data);
     } catch (error) {
       console.error('=== QUEUE FETCH ERROR ===');
       console.error('Error:', error);
@@ -120,14 +123,14 @@ const OPDManagement = () => {
 
   const fetchStats = async () => {
     if (!selectedOpd) {
-      console.log('No selectedOpd, skipping fetchStats');
+      //console.log('No selectedOpd, skipping fetchStats');
       return;
     }
     try {
-      console.log(`Fetching stats for OPD: ${selectedOpd}`);
+      //console.log(`Fetching stats for OPD: ${selectedOpd}`);
       const response = await apiClient.get(`/opd/${selectedOpd}/stats`);
       setStats(response.data);
-      console.log(`\n\nStats data:`, response.data);
+      //console.log(`\n\nStats data:`, response.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
     }
@@ -135,12 +138,12 @@ const OPDManagement = () => {
 
   const fetchReferred = async () => {
     if (!selectedOpd) {
-      console.log('No selectedOpd, skipping fetchReferred');
+      //console.log('No selectedOpd, skipping fetchReferred');
       return;
     }
     try {
-      console.log(`\n\nFetching referred patients from ${selectedOpd}`);
-      console.log(`\n\nFetching referred patients to ${selectedOpd}`);
+      //console.log(`\n\nFetching referred patients from ${selectedOpd}`);
+      //console.log(`\n\nFetching referred patients to ${selectedOpd}`);
       const [fromResp, toResp] = await Promise.all([
         apiClient.get(`/patients/referred`, { params: { from_opd: selectedOpd } }),
         apiClient.get(`/patients/referred`, { params: { to_opd: selectedOpd } })
@@ -148,8 +151,8 @@ const OPDManagement = () => {
       // Ensure data is an array
       const fromData = Array.isArray(fromResp.data) ? fromResp.data : [];
       const toData = Array.isArray(toResp.data) ? toResp.data : [];
-      console.log('Referred FROM data:', fromData);
-      console.log('Referred TO data:', toData);
+      //console.log('Referred FROM data:', fromData);
+      //console.log('Referred TO data:', toData);
       setReferredFromHere(fromData);
       setReferredToHere(toData);
     } catch (error) {
@@ -176,6 +179,12 @@ const OPDManagement = () => {
   };
 
   const handleDilatePatient = (patient) => {
+    // Mark this patient as having been dilated (one-time confirmation)
+    setHasBeenDilated(prev => ({
+      ...prev,
+      [patient.patient_id]: true
+    }));
+    
     setActionDialog({
       open: true,
       type: 'dilate',
@@ -200,16 +209,16 @@ const OPDManagement = () => {
   };
 
   const handleEndVisit = (patient) => {
-    console.log(`\n\nEnding visit for patient ${patient.token_number}`);
+    //console.log(`\n\nEnding visit for patient ${patient.token_number}`);
     setSelectedPatient(patient);
     setEndVisitDialogOpen(true);
   };
 
   const confirmEndVisit = async () => {
-    console.log(`\n\nEnding visit for patient ${selectedPatient.token_number}`);
+    //console.log(`\n\nEnding visit for patient ${selectedPatient.token_number}`);
   
     if (!selectedPatient || !selectedOpd) return;
-      console.log(`\n\nPatient not here:`, selectedPatient);
+      //console.log(`\n\nPatient not here:`, selectedPatient);
     try {
       await apiClient.post(`/patients/${selectedPatient.patient_id}/endvisit`);
 
@@ -236,7 +245,7 @@ const OPDManagement = () => {
       } else if (type === 'refer') {
         const targetOpd = actionDialog.targetOpd;
         const remarks = actionDialog.remarks || '';
-        console.log('Referring patient:', { patient_id: patient.patient_id, to_opd: targetOpd, remarks });
+        //console.log('Referring patient:', { patient_id: patient.patient_id, to_opd: targetOpd, remarks });
         await apiClient.post(`/patients/${patient.patient_id}/refer`, {
           to_opd: targetOpd,
           remarks: remarks
@@ -305,7 +314,6 @@ const OPDManagement = () => {
     const now = new Date();
     const regTime = new Date(registrationTime);
     const diffMinutes = Math.floor((now - regTime) / (1000 * 60));
-    console.log(diffMinutes);
     let hours = Math.floor(diffMinutes / 60);
     const minutes = diffMinutes % 60;
     const days = Math.floor(hours / 24);
@@ -313,7 +321,16 @@ const OPDManagement = () => {
     return ` ${days}d ${hours}h ${minutes}m`;
   };
 
+  const isDilatedForMoreThan30Mins = (dilationTime) => {
+    const now = new Date();
+    const dilatedAt = new Date(dilationTime);
+    const diffMilliseconds = now.getTime() - dilatedAt.getTime();
+    const diffMinutes = diffMilliseconds / (1000 * 60);
+    return diffMinutes > 30;
+  };
+
   const handleReturnFromReferral = (patient) => {
+    console.log("handleReturnFromReferral")
     setSelectedPatientForReturn(patient);
     setReturnRemarks(''); // Clear previous remarks
     setReturnReferralDialogOpen(true);
@@ -482,154 +499,184 @@ const OPDManagement = () => {
                   </Button>
                 </Box>
                 
-                <List>
+                <Box
+                  sx={{maxHeight: "75vh", overflowY: "auto", pr: 1,
+
+                    "&::-webkit-scrollbar": {
+                      width: "8px",
+                    },
+                    "&::-webkit-scrollbar-track": {
+                      background: "#f1f1f1",
+                      borderRadius: "10px",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      background: "#b0b0b0",
+                      borderRadius: "10px",
+                    },
+                    "&::-webkit-scrollbar-thumb:hover": {
+                      background: "#888",
+                    }
+                  }}
+                >
+
+
+                <List style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                   {queue.map((patient, index) => (
                     <React.Fragment key={patient.id}>
-                      <ListItem>
-                        <ListItemText
-                          primary={`${patient.position}. ${patient.token_number.split("-")[1]} - ${patient.patient_name}`}
-                          secondary={`Age: ${patient.age} | Waiting: ${formatWaitingTime(patient.registration_time)}`}
-                        />
-                        <ListItemSecondaryAction>
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Chip
-                              label={getStatusLabel(patient.status, patient.dilation_time)}
-                              color={getStatusColor(patient.status)}
-                              size="small"
-                            />
-                            
-                            {/* Send Back to Queue Button - for patients currently in OPD */}
-                            {patient.status === 'in' && (
-                              <Tooltip title="Send patient back to queue (if called by mistake)">
-                                <Button
-                                  variant="outlined"
-                                  size="small"
-                                  color="warning"
-                                  startIcon={<Undo />}
-                                  onClick={() => handleSendBackToQueue(patient)}
-                                  disabled={loading}
-                                >
-                                  Send Back
-                                </Button>
-                              </Tooltip>
-                            )}
-
-                            {/* Call Out of Order Button - for pending/dilated patients */}
-                            {(patient.status === 'pending' || patient.status === 'dilated') && (
-                              <Tooltip title="Call this patient out of order (emergency/priority case)">
-                                <Button
-                                  variant="outlined"
-                                  size="small"
-                                  color="secondary"
-                                  startIcon={<SkipNext />}
-                                  onClick={() => handleCallOutOfOrder(patient)}
-                                  disabled={loading}
-                                >
-                                  Call Now
-                                </Button>
-                              </Tooltip>
-                            )}
-
-                            {patient.status !== 'dilated' && (
-                              <Button
-                                  variant="outlined"
-                                  size="small"
-                                  onClick={() => handleDilatePatient(patient)}
-                                  disabled={patient.status !== 'in'}
-                              >
-                                Dilate  
-                              </Button>
-                            )}
-                            {patient.status === 'dilated' && (
-                              <Button
-                                  variant="outlined"
-                                  size="small"
-                                  onClick={() => handleReturnDilated(patient)}
-                                  disabled={patient.status !== 'dilated'}
-                              >
-                                End Dilation
-                              </Button>
-                            )}
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={() => handleReferPatient(patient)}
-                                disabled={patient.status !== 'in'}
-                            >
-                              Refer
-                            </Button>
-                            {console.log(patient.is_referred)}
-                            {patient.is_referred  && (
-                              
-                              <Button
-                                  variant="outlined"
-                                  size="small"
-                                  onClick={() => handleReturnFromReferral(patient)}
-                                  color="success"
-                                  tooltip="This is a referred patient. Click to send back to the original OPD."
-                              >
-                                Return
-                              </Button>
-                              
-                            )}
-                            
-
-                            {/* This Dialog should ideally be placed at the root level of the component's return block,
-                                not nested deeply within ListItemSecondaryAction, for proper rendering and accessibility. */}
-                            <Dialog open={returnReferralDialogOpen} 
-                              onClose={() => setReturnReferralDialogOpen(false)}
-                              fullWidth>
-                              <DialogTitle>Referred Patient. End Visit in current OPD and send back to the original OPD</DialogTitle>
-                              <DialogContent>
-                                <Typography variant="body1" gutterBottom>
-                                  Patient: {selectedPatientForReturn?.patient_name} ({selectedPatientForReturn?.token_number.split("-")[1]})
-                                </Typography>
-                                <Typography variant="body2" color="textSecondary" gutterBottom>
-                                  Returning to OPD: {selectedPatientForReturn?.referred_from?.toUpperCase()}
-                                </Typography>
-                                <TextField
-                                  margin="normal"
-                                  fullWidth
-                                  label="Remarks (Optional)"
-                                  multiline
-                                  rows={3}
-                                  value={returnRemarks}
-                                  onChange={(e) => setReturnRemarks(e.target.value)}
-                                />
-                              </DialogContent>
-                              <DialogActions>
-                                <Button onClick={() => setReturnReferralDialogOpen(false)} color="primary">
-                                  Cancel
-                                </Button>
-                                <Button
-                                  onClick={confirmReturnFromReferral}
-                                  color="success"
-                                  variant="contained"
-                                  disabled={returnLoading}
-                                >
-                                  {returnLoading ? 'Returning...' : 'Confirm Return'}
-                                </Button>
-                              </DialogActions>
-                            </Dialog>
-                            
-                            { (
-                              <Button
-                                variant='contained'
-                                size="small"
-                                onClick={() => handleEndVisit(patient)}
-                                color="error"
-                                tooltip="End Visit"
-                              >
-                                End Visit {/* Assuming DoneAll icon is available or will be imported */}
-                              </Button>
+                      <ListItem sx={{ display: "flex", flexDirection: "column", 
+                        alignItems: "flex-start",
+                        ...(patient.status === 'dilated' && isDilatedForMoreThan30Mins(patient.dilation_time) && {
+                          backgroundColor: "#FEF3C6"
+                        })}}>
+  
+                        {/* Row 1: Name + Waiting */}
+                        <Box sx={{ 
+                          width: "100%", 
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "space-between" 
+                        }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <span>
+                              {patient.position}. {patient.token_number.split("-")[1]} - {patient.patient_name}
+                            </span>
+                            <span style={{ color: "#888", fontSize: "0.85rem" }}>
+                              | Waiting: {formatWaitingTime(patient.registration_time)}
+                            </span>
+                            {hasBeenDilated[patient.patient_id] && (
+                              <span style={{ color: "#1976d2", fontSize: "0.85rem", fontWeight: "500" }}>
+                                | Dilated Patient
+                              </span>
                             )}
                           </Box>
-                        </ListItemSecondaryAction>
+
+                          {/* Status Chip on right of row 1 */}
+                          
+                        </Box>
+
+                        {/* Row 2: BUTTONS (aligned right) */}
+                        <Box 
+                          sx={{
+                            width: "100%",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            mt: 1,
+                            gap: 1,
+                            flexWrap: "wrap"
+                          }}
+                        >
+                          <Chip
+                            label={getStatusLabel(patient.status, patient.dilation_time)}
+                            color={getStatusColor(patient.status)}
+                            size="small"
+                          />
+                          <div>
+
+                          {/* Return from Referral */}
+                          {patient.is_referred && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => handleReturnFromReferral(patient)}
+                              color="warning"
+                              style={{marginLeft: '10px'}}
+                            >
+                              Return
+                            </Button>
+                          )}
+
+                          {/* Send Back */}
+                          {patient.status === 'in' && (
+                            <Tooltip title="Send patient back to queue (if called by mistake)">
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                color="secondary"
+                                startIcon={<Undo />}
+                                onClick={() => handleSendBackToQueue(patient)}
+                                disabled={loading}
+                                className='opdbutton'
+                              >
+                                Send Back
+                              </Button>
+                            </Tooltip>
+                          )}
+
+                          {/* Call Now */}
+                          {(patient.status === 'pending' || patient.status === 'dilated') && (
+                            <Tooltip title="Call this patient out of order">
+                              <Button
+                                style={{marginLeft: '10px'}}
+                                variant="outlined"
+                                size="small"
+                                color="success"
+                                startIcon={<SkipNext />}
+                                onClick={() => handleCallOutOfOrder(patient)}
+                                disabled={loading}
+                              >
+                                Call Now
+                              </Button>
+                            </Tooltip>
+                          )}
+
+                          {/* Dilate */}
+                          {patient.status !== 'dilated' && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => handleDilatePatient(patient)}
+                              disabled={patient.status !== 'in'}
+                              style={{marginLeft: '10px'}}
+                            >
+                              Dilate
+                            </Button>
+                          )}
+
+                          {/* End Dilation */}
+                          {patient.status === 'dilated' && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => handleReturnDilated(patient)}
+                              style={{marginLeft: '10px'}}
+                            >
+                              End Dilation
+                            </Button>
+                          )}
+
+                          {/* Refer */}
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => handleReferPatient(patient)}
+                            disabled={patient.status !== 'in'}
+                            style={{marginLeft: '10px'}}
+                          >
+                            Refer
+                          </Button>
+
+                          
+
+                          {/* End Visit */}
+                          <Button
+                            variant="contained"
+                            size="small"
+                            onClick={() => handleEndVisit(patient)}
+                            color="error"
+                            style={{marginLeft: '10px'}}
+                          >
+                            END VISIT
+                          </Button>
+                          </div>
+                        </Box>
                       </ListItem>
+
                       {index < queue.length - 1 && <Divider />}
                     </React.Fragment>
                   ))}
                 </List>
+
+                </Box>
               </CardContent>
             </Card>
           </Grid>
@@ -799,6 +846,43 @@ const OPDManagement = () => {
               disabled={loading || (actionDialog.type === 'refer' && !actionDialog.targetOpd)}
             >
               {loading ? 'Processing...' : 'Confirm'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={returnReferralDialogOpen} 
+          onClose={() => setReturnReferralDialogOpen(false)}
+          fullWidth
+        >
+          <DialogTitle>Referred Patient. End Visit in current OPD and send back to the original OPD</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              Patient: {selectedPatientForReturn?.patient_name} ({selectedPatientForReturn?.token_number.split("-")[1]})
+            </Typography>
+            <Typography variant="body2" color="textSecondary" gutterBottom>
+              Returning to OPD: {selectedPatientForReturn?.referred_from?.toUpperCase()}
+            </Typography>
+            <TextField
+              margin="normal"
+              fullWidth
+              label="Remarks (Optional)"
+              multiline
+              rows={3}
+              value={returnRemarks}
+              onChange={(e) => setReturnRemarks(e.target.value)}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setReturnReferralDialogOpen(false)} color="primary">
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmReturnFromReferral}
+              color="success"
+              variant="contained"
+              disabled={returnLoading}
+            >
+              {returnLoading ? 'Returning...' : 'Confirm Return'}
             </Button>
           </DialogActions>
         </Dialog>

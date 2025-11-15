@@ -15,6 +15,7 @@ export const OPDProvider = ({ children }) => {
   const [opds, setOpds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
 
   const fetchOPDs = async () => {
     try {
@@ -109,6 +110,7 @@ export const OPDProvider = ({ children }) => {
     activeOPDs: getActiveOPDs(),
     loading,
     error,
+    
     fetchOPDs,
     createOPD,
     updateOPD,
