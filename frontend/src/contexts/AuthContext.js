@@ -15,6 +15,10 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [allowedOPDs, setAllowedOPDs] = useState(() => {
+    const stored = localStorage.getItem('allowed_opds');
+    return stored ? JSON.parse(stored) : [];
+  });
 
   useEffect(() => {
     if (token) {
@@ -45,11 +49,23 @@ export const AuthProvider = ({ children }) => {
         password,
       });
       
-      const { access_token } = response.data;
+      const { access_token, user: userData, allowed_opds } = response.data;
+      
+      // Store token
       setToken(access_token);
       localStorage.setItem('token', access_token);
       
-      await fetchUser();
+      // Store user data
+      setUser(userData);
+      
+      // Store allowed OPDs
+      const opds = allowed_opds || [];
+      setAllowedOPDs(opds);
+      localStorage.setItem('allowed_opds', JSON.stringify(opds));
+      
+      console.log('Login successful. User:', userData);
+      console.log('Allowed OPDs:', opds);
+      
       return { success: true };
     } catch (error) {
       console.error('Login failed:', error);
@@ -63,7 +79,9 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setAllowedOPDs([]);
     localStorage.removeItem('token');
+    localStorage.removeItem('allowed_opds');
   };
 
   const hasRole = (requiredRoles) => {
@@ -74,12 +92,24 @@ export const AuthProvider = ({ children }) => {
     return user.role === requiredRoles;
   };
 
+  const hasOPDAccess = (opdCode) => {
+    if (!user) return false;
+    
+    // Admin has access to all OPDs
+    if (user.role === 'admin') return true;
+    
+    // Check if OPD is in allowed list
+    return allowedOPDs.includes(opdCode);
+  };
+
   const value = {
     user,
     login,
     logout,
     loading,
     hasRole,
+    hasOPDAccess,
+    allowedOPDs,
     isAuthenticated: !!user,
   };
 

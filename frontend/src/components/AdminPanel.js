@@ -59,6 +59,12 @@ const AdminPanel = () => {
   const [dialogType, setDialogType] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
   const [formData, setFormData] = useState({});
+  
+  // OPD Access Management State
+  const [opdAccessDialogOpen, setOpdAccessDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userAllowedOPDs, setUserAllowedOPDs] = useState([]);
+  const [usersOPDAccess, setUsersOPDAccess] = useState({}); // Store all users' OPD access
 
   useEffect(() => {
     fetchDashboardStats();
@@ -81,6 +87,22 @@ const AdminPanel = () => {
     try {
       const response = await apiClient.get('/admin/users');
       setUsers(response.data);
+      
+      // Fetch OPD access for all nursing users
+      const nursingUsers = response.data.filter(u => u.role === 'nursing');
+      const opdAccessMap = {};
+      
+      for (const user of nursingUsers) {
+        try {
+          const accessResponse = await apiClient.get(`/admin/users/${user.id}/opd-access`);
+          opdAccessMap[user.id] = accessResponse.data.allowed_opds || [];
+        } catch (error) {
+          console.error(`Failed to fetch OPD access for user ${user.id}:`, error);
+          opdAccessMap[user.id] = [];
+        }
+      }
+      
+      setUsersOPDAccess(opdAccessMap);
     } catch (error) {
       console.error('Failed to fetch users:', error);
     }
@@ -101,6 +123,66 @@ const AdminPanel = () => {
       setPatientFlows(response.data);
     } catch (error) {
       console.error('Failed to fetch patient flows:', error);
+    }
+  };
+
+  // OPD Access Management Functions
+  const handleOpenOPDAccessDialog = async (user) => {
+    setSelectedUser(user);
+    setLoading(true);
+    try {
+      // Fetch user's current OPD access
+      const response = await apiClient.get(`/admin/users/${user.id}/opd-access`);
+      setUserAllowedOPDs(response.data.allowed_opds || []);
+      setOpdAccessDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to fetch user OPD access:', error);
+      setError('Failed to load user OPD access');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseOPDAccessDialog = () => {
+    setOpdAccessDialogOpen(false);
+    setSelectedUser(null);
+    setUserAllowedOPDs([]);
+  };
+
+  const handleToggleOPDAccess = (opdCode) => {
+    setUserAllowedOPDs((prev) => {
+      if (prev.includes(opdCode)) {
+        return prev.filter((code) => code !== opdCode);
+      } else {
+        return [...prev, opdCode];
+      }
+    });
+  };
+
+  const handleSaveOPDAccess = async () => {
+    if (!selectedUser) return;
+    
+    setLoading(true);
+    try {
+      await apiClient.post(`/admin/users/${selectedUser.id}/opd-access`, {
+        opd_codes: userAllowedOPDs
+      });
+      setSuccess(`OPD access updated for ${selectedUser.username}`);
+      
+      // Update the local OPD access map
+      setUsersOPDAccess(prev => ({
+        ...prev,
+        [selectedUser.id]: userAllowedOPDs
+      }));
+      
+      handleCloseOPDAccessDialog();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (error) {
+      console.error('Failed to update OPD access:', error);
+      setError(error.response?.data?.detail || 'Failed to update OPD access');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -178,7 +260,29 @@ const AdminPanel = () => {
       }
       handleCloseDialog();
     } catch (error) {
-      setError(error.response?.data?.detail || 'Operation failed');
+      console.error('Operation error:', error);
+      
+      // Handle Pydantic validation errors (array of error objects)
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        
+        if (Array.isArray(detail)) {
+          // Format Pydantic validation errors
+          const errorMessages = detail.map(err => {
+            const field = err.loc ? err.loc.join('.') : 'field';
+            return `${field}: ${err.msg}`;
+          }).join(', ');
+          setError(errorMessages);
+        } else if (typeof detail === 'string') {
+          // Simple string error
+          setError(detail);
+        } else {
+          // Object error - try to extract message
+          setError(JSON.stringify(detail));
+        }
+      } else {
+        setError('Operation failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -324,6 +428,7 @@ const AdminPanel = () => {
                       <TableCell>Email</TableCell>
                       <TableCell>Role</TableCell>
                       <TableCell>Status</TableCell>
+                      <TableCell>OPD Access</TableCell>
                       <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -345,6 +450,44 @@ const AdminPanel = () => {
                             color={user.is_active ? 'success' : 'error'}
                             size="small"
                           />
+                        </TableCell>
+                        <TableCell>
+                          {user.role === 'nursing' ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
+                                {usersOPDAccess[user.id]?.length > 0 ? (
+                                  usersOPDAccess[user.id].map(opdCode => {
+                                    const opd = opds.find(o => o.opd_code === opdCode);
+                                    return (
+                                      <Chip
+                                        key={opdCode}
+                                        label={opd?.opd_name || opdCode.toUpperCase()}
+                                        size="small"
+                                        color="primary"
+                                        variant="outlined"
+                                      />
+                                    );
+                                  })
+                                ) : (
+                                  <Typography variant="caption" color="error">
+                                    No OPD access
+                                  </Typography>
+                                )}
+                              </Box>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleOpenOPDAccessDialog(user)}
+                                sx={{ alignSelf: 'flex-start' }}
+                              >
+                                Manage OPDs
+                              </Button>
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" color="textSecondary">
+                              N/A
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell>
                           <IconButton
@@ -676,6 +819,73 @@ const AdminPanel = () => {
             <Button onClick={handleCloseDialog}>Cancel</Button>
             <Button onClick={handleSubmit} variant="contained" disabled={loading}>
               {loading ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* OPD Access Management Dialog */}
+        <Dialog 
+          open={opdAccessDialogOpen} 
+          onClose={handleCloseOPDAccessDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            Manage OPD Access - {selectedUser?.username}
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+              Select which OPDs this nurse can access:
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {opds.filter(opd => opd.is_active).map((opd) => (
+                <Box
+                  key={opd.opd_code}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    p: 1.5,
+                    border: '1px solid',
+                    borderColor: userAllowedOPDs.includes(opd.opd_code) ? 'primary.main' : 'divider',
+                    borderRadius: 1,
+                    cursor: 'pointer',
+                    backgroundColor: userAllowedOPDs.includes(opd.opd_code) ? 'action.selected' : 'background.paper',
+                    '&:hover': {
+                      backgroundColor: 'action.hover',
+                    },
+                  }}
+                  onClick={() => handleToggleOPDAccess(opd.opd_code)}
+                >
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle1" fontWeight="medium">
+                      {opd.opd_name}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Code: {opd.opd_code}
+                    </Typography>
+                  </Box>
+                  {userAllowedOPDs.includes(opd.opd_code) && (
+                    <CheckCircle color="primary" />
+                  )}
+                </Box>
+              ))}
+            </Box>
+
+            {userAllowedOPDs.length === 0 && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                No OPDs selected. Nurse will not have access to any OPD.
+              </Alert>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseOPDAccessDialog}>Cancel</Button>
+            <Button 
+              onClick={handleSaveOPDAccess} 
+              variant="contained" 
+              disabled={loading}
+            >
+              {loading ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogActions>
         </Dialog>

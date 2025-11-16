@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from database_sqlite import get_db, User, UserRole
+from typing import List
+from pydantic import BaseModel
+from database_sqlite import get_db, User, UserRole, get_user_opd_access
 from auth import (
     authenticate_user, create_access_token, get_password_hash,
     get_current_active_user, UserLogin, UserCreate, UserResponse, Token, ACCESS_TOKEN_EXPIRE_MINUTES
@@ -9,7 +11,14 @@ from auth import (
 
 router = APIRouter()
 
-@router.post("/login", response_model=Token)
+# Extended login response model
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+    allowed_opds: List[str]  # OPD codes user has access to
+
+@router.post("/login", response_model=LoginResponse)
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     user = authenticate_user(db, user_credentials.username, user_credentials.password)
     if not user:
@@ -22,7 +31,30 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    # Get user's allowed OPDs (only for nursing staff)
+    allowed_opds = []
+    if user.role == UserRole.NURSING:
+        allowed_opds = get_user_opd_access(db, user.id)
+    elif user.role == UserRole.ADMIN:
+        # Admin has access to all OPDs
+        from database_sqlite import OPD
+        all_opds = db.query(OPD).filter(OPD.is_active == True).all()
+        allowed_opds = [opd.opd_code for opd in all_opds]
+    # Registration staff doesn't need OPD access (allowed_opds remains empty)
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            role=user.role,
+            is_active=user.is_active
+        ),
+        "allowed_opds": allowed_opds
+    }
 
 @router.post("/register", response_model=UserResponse)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):

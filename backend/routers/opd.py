@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow, get_ist_now
-from auth import get_current_active_user, User, require_role, UserRole
+from auth import get_current_active_user, User, require_role, check_opd_access, UserRole
 from websocket_manager import broadcast_queue_update, broadcast_patient_status_update, broadcast_display_update
 import pytz
 ist = pytz.timezone('Asia/Kolkata')
@@ -49,6 +49,10 @@ async def get_opd_queue(
 ):
     # Convert to lowercase to match database
     opd_type = opd_type.lower()
+    
+    # Check OPD access
+    check_opd_access(current_user, opd_type, db)
+    
     print(f"\n{'='*60}")
     print(f"=== GET QUEUE FOR OPD: {opd_type} ===")
     print(f"!!! CODE VERSION: 2024-11-14-v3 !!!")
@@ -144,9 +148,13 @@ async def get_opd_queue(
 async def call_next_patient(
     opd_type: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.NURSING))
+    current_user: User = Depends(get_current_active_user)
 ):
     opd_type = opd_type.lower()
+    
+    # Check OPD access
+    check_opd_access(current_user, opd_type, db)
+    
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
     if not opd:
@@ -225,9 +233,13 @@ async def dilate_patient(
     opd_type: str,
     patient_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.NURSING))
+    current_user: User = Depends(get_current_active_user)
 ):
     opd_type = opd_type.lower()
+    
+    # Check OPD access
+    check_opd_access(current_user, opd_type, db)
+    
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -274,9 +286,13 @@ async def return_dilated_patient(
     opd_type: str,
     patient_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.NURSING))
+    current_user: User = Depends(get_current_active_user)
 ):
     opd_type = opd_type.lower()
+    
+    # Check OPD access
+    check_opd_access(current_user, opd_type, db)
+    
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -333,9 +349,13 @@ async def send_back_to_queue(
     opd_type: str,
     patient_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.NURSING))
+    current_user: User = Depends(get_current_active_user)
 ):
     opd_type = opd_type.lower()
+    
+    # Check OPD access
+    check_opd_access(current_user, opd_type, db)
+    
     """Send a patient who was accidentally called back to the queue"""
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
@@ -398,9 +418,13 @@ async def call_out_of_order(
     opd_type: str,
     patient_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.NURSING))
+    current_user: User = Depends(get_current_active_user)
 ):
     opd_type = opd_type.lower()
+    
+    # Check OPD access
+    check_opd_access(current_user, opd_type, db)
+    
     """Call a specific patient out of order (emergency or special case)"""
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
@@ -479,6 +503,10 @@ async def get_opd_stats(
     current_user: User = Depends(get_current_active_user)
 ):
     opd_type = opd_type.lower()
+    
+    # Check OPD access
+    check_opd_access(current_user, opd_type, db)
+    
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
     if not opd:

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiClient from '../apiClient';
+import { useAuth } from './AuthContext';
 
 const OPDContext = createContext();
 
@@ -12,6 +13,7 @@ export const useOPD = () => {
 };
 
 export const OPDProvider = ({ children }) => {
+  const { user, allowedOPDs, hasOPDAccess } = useAuth();
   const [opds, setOpds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -94,7 +96,21 @@ export const OPDProvider = ({ children }) => {
   };
 
   const getActiveOPDs = () => {
-    return opds.filter(opd => opd.is_active);
+    const activeOpds = opds.filter(opd => opd.is_active);
+    
+    // If user is not authenticated, return all active OPDs (for public access)
+    if (!user) return activeOpds;
+    
+    // Admin has access to all OPDs
+    if (user.role === 'admin') return activeOpds;
+    
+    // For nursing staff, filter based on allowed OPDs
+    if (user.role === 'nursing') {
+      return activeOpds.filter(opd => allowedOPDs.includes(opd.opd_code));
+    }
+    
+    // Registration staff doesn't need OPD filtering
+    return activeOpds;
   };
 
   const getOPDByCode = (opdCode) => {

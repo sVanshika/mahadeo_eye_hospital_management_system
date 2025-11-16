@@ -4,7 +4,7 @@ from sqlalchemy import func, desc
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, User, Room, Patient, Queue, PatientStatus, OPD, PatientFlow, UserRole, get_ist_now
+from database_sqlite import get_db, User, Room, Patient, Queue, PatientStatus, OPD, PatientFlow, UserRole, get_ist_now, UserOPDAccess, get_user_opd_access
 from auth import get_current_active_user, User, require_role, UserCreate, UserResponse
 
 router = APIRouter()
@@ -48,6 +48,25 @@ class PatientFlowResponse(BaseModel):
     status: PatientStatus
     timestamp: datetime
     notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+# OPD Access Management Models
+class UserOPDAccessResponse(BaseModel):
+    user_id: int
+    username: str
+    role: UserRole
+    allowed_opds: List[str]  # List of OPD codes user has access to
+
+class AssignOPDAccessRequest(BaseModel):
+    opd_codes: List[str]  # List of OPD codes to assign to user
+
+class OPDAccessDetailResponse(BaseModel):
+    id: int
+    user_id: int
+    opd_code: str
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -150,6 +169,135 @@ async def deactivate_user(
     db.commit()
     
     return {"message": "User deactivated successfully"}
+
+# OPD Access Management
+@router.get("/users/{user_id}/opd-access", response_model=UserOPDAccessResponse)
+async def get_user_opd_access_endpoint(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    """Get all OPD codes that a user has access to"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get user's OPD access entries
+    allowed_opds = get_user_opd_access(db, user_id)
+    
+    return UserOPDAccessResponse(
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        allowed_opds=allowed_opds
+    )
+
+@router.post("/users/{user_id}/opd-access")
+async def assign_opd_access(
+    user_id: int,
+    access_data: AssignOPDAccessRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    """
+    Assign OPD access to a user (replaces existing assignments).
+    Only applicable to Nursing role users.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Only allow OPD access management for nursing staff
+    if user.role != UserRole.NURSING:
+        raise HTTPException(
+            status_code=400, 
+            detail="OPD access control is only applicable to Nursing staff"
+        )
+    
+    # Validate that all OPD codes exist
+    for opd_code in access_data.opd_codes:
+        opd = db.query(OPD).filter(OPD.opd_code == opd_code, OPD.is_active == True).first()
+        if not opd:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"OPD '{opd_code}' not found or inactive"
+            )
+    
+    # Remove all existing OPD access for this user
+    db.query(UserOPDAccess).filter(UserOPDAccess.user_id == user_id).delete()
+    
+    # Add new OPD access entries
+    for opd_code in access_data.opd_codes:
+        access_entry = UserOPDAccess(
+            user_id=user_id,
+            opd_code=opd_code
+        )
+        db.add(access_entry)
+    
+    db.commit()
+    
+    return {
+        "message": f"OPD access updated for user '{user.username}'",
+        "user_id": user_id,
+        "allowed_opds": access_data.opd_codes
+    }
+
+@router.delete("/users/{user_id}/opd-access/{opd_code}")
+async def remove_opd_access(
+    user_id: int,
+    opd_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    """Remove access to a specific OPD for a user"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Find and delete the access entry
+    access_entry = db.query(UserOPDAccess).filter(
+        UserOPDAccess.user_id == user_id,
+        UserOPDAccess.opd_code == opd_code
+    ).first()
+    
+    if not access_entry:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"User does not have access to OPD '{opd_code}'"
+        )
+    
+    db.delete(access_entry)
+    db.commit()
+    
+    return {
+        "message": f"Access to OPD '{opd_code}' removed for user '{user.username}'"
+    }
+
+@router.get("/opd-access/all", response_model=List[UserOPDAccessResponse])
+async def get_all_users_opd_access(
+    role: Optional[UserRole] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    """Get OPD access for all users (optionally filtered by role)"""
+    query = db.query(User).filter(User.is_active == True)
+    
+    if role:
+        query = query.filter(User.role == role)
+    
+    users = query.all()
+    
+    result = []
+    for user in users:
+        allowed_opds = get_user_opd_access(db, user.id)
+        result.append(UserOPDAccessResponse(
+            user_id=user.id,
+            username=user.username,
+            role=user.role,
+            allowed_opds=allowed_opds
+        ))
+    
+    return result
 
 # Dashboard and Analytics
 @router.get("/dashboard", response_model=DashboardStats)

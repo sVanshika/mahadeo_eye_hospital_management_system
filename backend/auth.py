@@ -133,3 +133,55 @@ def require_role(required_role: UserRole):
             )
         return current_user
     return role_checker
+
+def check_opd_access(user: User, opd_code: str, db: Session):
+    """
+    Check if a user has access to a specific OPD.
+    Raises HTTPException if user doesn't have access.
+    
+    Args:
+        user: The current user object
+        opd_code: The OPD code to check access for
+        db: Database session
+        
+    Returns:
+        True if user has access
+        
+    Raises:
+        HTTPException: If user doesn't have access
+    """
+    # Admin has access to all OPDs
+    if user.role == UserRole.ADMIN:
+        return True
+    
+    # For nursing staff, check OPD access
+    if user.role == UserRole.NURSING:
+        from database_sqlite import user_has_opd_access
+        if user_has_opd_access(db, user.id, opd_code):
+            return True
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You do not have access to OPD '{opd_code}'. Please contact your administrator."
+            )
+    
+    # Other roles (e.g., Registration) don't have OPD access
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Your role does not have OPD access"
+    )
+
+def require_opd_access(opd_code: str):
+    """
+    Dependency to check if user has access to a specific OPD.
+    Admin users bypass this check (have access to all OPDs).
+    Nursing users must have explicit OPD access.
+    """
+    def opd_access_checker(
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+    ):
+        check_opd_access(current_user, opd_code, db)
+        return current_user
+    
+    return opd_access_checker

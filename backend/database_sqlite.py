@@ -52,6 +52,21 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=get_ist_now)
 
+class UserOPDAccess(Base):
+    """Table to store which OPDs a nurse user can access"""
+    __tablename__ = "user_opd_access"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    opd_code = Column(String, nullable=False)  # e.g., "opd1", "opd2"
+    created_at = Column(DateTime, default=get_ist_now)
+    
+    # Relationships
+    user = relationship("User", back_populates="opd_access")
+    
+# Add relationship to User model
+User.opd_access = relationship("UserOPDAccess", back_populates="user", cascade="all, delete-orphan")
+
 class OPD(Base):
     __tablename__ = "opds"
     
@@ -120,6 +135,27 @@ class PatientFlow(Base):
     notes = Column(String)
     
     patient = relationship("Patient")
+
+# Helper functions for OPD access
+def get_user_opd_access(db: SessionLocal, user_id: int):
+    """
+    Get list of OPD codes that a user has access to.
+    Returns empty list if user has no access entries.
+    Admin users should bypass this check (handled in auth layer).
+    """
+    access_entries = db.query(UserOPDAccess).filter(UserOPDAccess.user_id == user_id).all()
+    return [entry.opd_code for entry in access_entries]
+
+def user_has_opd_access(db: SessionLocal, user_id: int, opd_code: str) -> bool:
+    """
+    Check if a user has access to a specific OPD.
+    Returns True if access exists, False otherwise.
+    """
+    access = db.query(UserOPDAccess).filter(
+        UserOPDAccess.user_id == user_id,
+        UserOPDAccess.opd_code == opd_code
+    ).first()
+    return access is not None
 
 # Dependency to get database session
 def get_db():
