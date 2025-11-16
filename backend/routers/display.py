@@ -38,12 +38,31 @@ async def get_opd_display_data(
     opd_type: str,
     db: Session = Depends(get_db)
 ):
+    print(f"\n{'='*60}")
+    print(f"=== GET DISPLAY DATA FOR OPD: {opd_type} ===")
+    print(f"{'='*60}")
+    
     # Get current patient (IN_OPD status)
+    # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
     current_patient_query = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
         Queue.status == PatientStatus.IN_OPD,
         Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
+    ).filter(
+        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
     ).order_by(Queue.position).first()
+    
+    if current_patient_query:
+        print(f"✓ Found current patient: {current_patient_query.patient.token_number} - {current_patient_query.patient.name}")
+        print(f"  - Referred from: {current_patient_query.patient.referred_from}")
+        print(f"  - Referred to: {current_patient_query.patient.referred_to}")
+    else:
+        print(f"✗ No current patient (IN_OPD) found for {opd_type}")
     
     current_patient = None
     if current_patient_query:
@@ -61,10 +80,18 @@ async def get_opd_display_data(
         )
     
     # Get next patients (PENDING status)
+    # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
     next_patients_query = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
         Queue.status == PatientStatus.PENDING,
         Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
+    ).filter(
+        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
     ).order_by(Queue.position).limit(5).all()
     
     next_patients = []
@@ -83,10 +110,18 @@ async def get_opd_display_data(
         ))
     
     # Get total patients in queue
+    # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
     total_patients = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
         Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED]),
         Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
+    ).filter(
+        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
     ).count()
     
     # Calculate estimated wait time (simplified)

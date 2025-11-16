@@ -36,11 +36,12 @@ const DisplayScreen = () => {
     
     // Set up real-time updates
     onDisplayUpdate(() => {
+      console.log('🔄 Display update triggered, fetching fresh data...');
       fetchDisplayData();
     });
 
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchDisplayData, 30000);
+    // Auto-refresh every 5 seconds (reduced from 30s for better responsiveness)
+    const interval = setInterval(fetchDisplayData, 5000);
 
     return () => {
       leaveDisplay();

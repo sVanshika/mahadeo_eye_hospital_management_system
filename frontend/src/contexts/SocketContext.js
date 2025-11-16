@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import io from 'socket.io-client';
 
 const SocketContext = createContext();
 
@@ -13,57 +14,130 @@ export const useSocket = () => {
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
+  const callbacksRef = useRef({
+    queue_update: [],
+    patient_status_update: [],
+    display_update: [],
+    patient_referral: []
+  });
 
   useEffect(() => {
-    // Mock socket for now - WebSocket functionality disabled
-    console.log('Socket functionality temporarily disabled');
-    setConnected(false);
-    setSocket(null);
+    // Connect to Socket.IO server
+    const SOCKET_URL = 'http://localhost:8000';
+    const socketInstance = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
+
+    socketInstance.on('connect', () => {
+      console.log('✅ Socket.IO connected:', socketInstance.id);
+      setConnected(true);
+    });
+
+    socketInstance.on('disconnect', (reason) => {
+      console.log('❌ Socket.IO disconnected:', reason);
+      setConnected(false);
+    });
+
+    socketInstance.on('connect_error', (error) => {
+      console.error('Socket.IO connection error:', error);
+      setConnected(false);
+    });
+
+    // Set up event listeners
+    socketInstance.on('queue_update', (data) => {
+      console.log('📢 Queue update received:', data);
+      callbacksRef.current.queue_update.forEach(callback => callback(data));
+    });
+
+    socketInstance.on('patient_status_update', (data) => {
+      console.log('📢 Patient status update received:', data);
+      callbacksRef.current.patient_status_update.forEach(callback => callback(data));
+    });
+
+    socketInstance.on('display_update', (data) => {
+      console.log('📢 Display update received:', data);
+      callbacksRef.current.display_update.forEach(callback => callback(data));
+    });
+
+    socketInstance.on('patient_referral', (data) => {
+      console.log('📢 Patient referral received:', data);
+      callbacksRef.current.patient_referral.forEach(callback => callback(data));
+    });
+
+    setSocket(socketInstance);
+
+    return () => {
+      console.log('🔌 Disconnecting Socket.IO');
+      socketInstance.disconnect();
+    };
   }, []);
 
   const joinOPD = (opdType) => {
-    // WebSocket functionality disabled
-    console.log('joinOPD called but WebSocket disabled');
+    if (socket && connected) {
+      socket.emit('join_opd', { opd_type: opdType });
+      console.log(`✅ Joined OPD: ${opdType}`);
+    } else {
+      console.warn('❌ Cannot join OPD - socket not connected');
+    }
   };
 
   const leaveOPD = (opdType) => {
-    // WebSocket functionality disabled
-    console.log('leaveOPD called but WebSocket disabled');
+    if (socket && connected) {
+      socket.emit('leave_opd', { opd_type: opdType });
+      console.log(`👋 Left OPD: ${opdType}`);
+    }
   };
 
   const joinDisplay = () => {
-    // WebSocket functionality disabled
-    console.log('joinDisplay called but WebSocket disabled');
+    if (socket && connected) {
+      socket.emit('join_display', {});
+      console.log('✅ Joined display room');
+    } else {
+      console.warn('❌ Cannot join display - socket not connected');
+    }
   };
 
   const leaveDisplay = () => {
-    // WebSocket functionality disabled
-    console.log('leaveDisplay called but WebSocket disabled');
+    if (socket && connected) {
+      socket.emit('leave_display', {});
+      console.log('👋 Left display room');
+    }
   };
 
   const onQueueUpdate = (callback) => {
-    // WebSocket functionality disabled
-    console.log('onQueueUpdate called but WebSocket disabled');
+    if (!callbacksRef.current.queue_update.includes(callback)) {
+      callbacksRef.current.queue_update.push(callback);
+    }
   };
 
   const onPatientStatusUpdate = (callback) => {
-    // WebSocket functionality disabled
-    console.log('onPatientStatusUpdate called but WebSocket disabled');
+    if (!callbacksRef.current.patient_status_update.includes(callback)) {
+      callbacksRef.current.patient_status_update.push(callback);
+    }
   };
 
   const onDisplayUpdate = (callback) => {
-    // WebSocket functionality disabled
-    console.log('onDisplayUpdate called but WebSocket disabled');
+    if (!callbacksRef.current.display_update.includes(callback)) {
+      callbacksRef.current.display_update.push(callback);
+    }
   };
 
   const onPatientReferral = (callback) => {
-    // WebSocket functionality disabled
-    console.log('onPatientReferral called but WebSocket disabled');
+    if (!callbacksRef.current.patient_referral.includes(callback)) {
+      callbacksRef.current.patient_referral.push(callback);
+    }
   };
 
   const removeAllListeners = () => {
-    // WebSocket functionality disabled
-    console.log('removeAllListeners called but WebSocket disabled');
+    callbacksRef.current = {
+      queue_update: [],
+      patient_status_update: [],
+      display_update: [],
+      patient_referral: []
+    };
   };
 
   const value = {

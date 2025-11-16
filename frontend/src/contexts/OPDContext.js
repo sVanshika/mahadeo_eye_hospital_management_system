@@ -113,6 +113,11 @@ export const OPDProvider = ({ children }) => {
     return activeOpds;
   };
 
+  const getAllActiveOPDs = () => {
+    // Returns ALL active OPDs without filtering (for referrals, etc.)
+    return opds.filter(opd => opd.is_active);
+  };
+
   const getOPDByCode = (opdCode) => {
     return opds.find(opd => opd.opd_code === opdCode);
   };
@@ -124,6 +129,7 @@ export const OPDProvider = ({ children }) => {
   const value = {
     opds,
     activeOPDs: getActiveOPDs(),
+    allActiveOPDs: getAllActiveOPDs(), // All OPDs without filtering
     loading,
     error,
     

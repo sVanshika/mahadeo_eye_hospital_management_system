@@ -97,16 +97,24 @@ async def get_opd_queue(
         traceback.print_exc()
         return []
     
-    # Sort referred patients by total waiting time (descending - longest waiting first)
-    # Separate referred and non-referred patients
-    referred_patients = [e for e in queue_entries if e.patient.current_status == PatientStatus.REFERRED and e.status == PatientStatus.PENDING]
-    other_patients = [e for e in queue_entries if not (e.patient.current_status == PatientStatus.REFERRED and e.status == PatientStatus.PENDING)]
+    # Sort queue: IN_OPD first, then other patients by position, then referred by waiting time
+    # Separate into 3 categories
+    # 1. IN_OPD: Anyone currently being served (Queue.status = IN_OPD) - ALWAYS show at top
+    in_opd_patients = [e for e in queue_entries if e.status == PatientStatus.IN_OPD]
+    
+    # 2. REFERRED: Patients waiting to be called who were referred (Patient.current_status = REFERRED and NOT in OPD)
+    referred_patients = [e for e in queue_entries if e.patient.current_status == PatientStatus.REFERRED and e.status != PatientStatus.IN_OPD]
+    
+    # 3. OTHER: Regular waiting patients (PENDING, DILATED, etc.)
+    other_patients = [e for e in queue_entries if e.status != PatientStatus.IN_OPD and e.patient.current_status != PatientStatus.REFERRED]
     
     # Sort referred patients by registration time (oldest first = longest waiting)
     referred_patients.sort(key=lambda x: x.patient.registration_time)
     
-    # Combine: other patients in their original order, then referred patients sorted by waiting time
-    queue_entries = other_patients + referred_patients
+    # Combine: IN_OPD first (current patient), then other patients, then referred patients
+    queue_entries = in_opd_patients + other_patients + referred_patients
+    
+    print(f"Queue order: {len(in_opd_patients)} IN_OPD + {len(other_patients)} other + {len(referred_patients)} referred")
 
     print("**** Building queue response ****")
     queue_data = []
@@ -160,6 +168,29 @@ async def call_next_patient(
     if not opd:
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
     
+    # CRITICAL: Check if there's already a patient IN_OPD
+    # Exclude patients who were referred out of this OPD or have REFERRED status
+    existing_in_opd = db.query(Queue).join(Patient).filter(
+        Queue.opd_type == opd_type,
+        Queue.status == PatientStatus.IN_OPD,
+        # IMPORTANT: Exclude patients with REFERRED status (they're no longer in this OPD)
+        Patient.current_status != PatientStatus.REFERRED
+    ).filter(
+        # Also exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+        # This is a backup check in case Patient.current_status wasn't updated
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
+    ).first()
+    
+    if existing_in_opd:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Another patient ({existing_in_opd.patient.token_number} - {existing_in_opd.patient.name}) is currently in OPD. Please complete or send them back first."
+        )
+    
     # Get all pending patients (including referred patients who can be called)
     pending_patients = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
@@ -194,13 +225,23 @@ async def call_next_patient(
     if not next_patient:
         raise HTTPException(status_code=404, detail="No patients in queue")
     
-    # Update queue status to IN_OPD, but keep patient's overall status as REFERRED if they were referred
+    # Update queue status to IN_OPD
     next_patient.status = PatientStatus.IN_OPD
     next_patient.patient.current_room = f"opd_{opd_type}"
     next_patient.updated_at = get_ist_now()
     
-    # Only update patient's current_status to IN_OPD if they're not a referred patient
-    if next_patient.patient.current_status != PatientStatus.REFERRED:
+    # IMPORTANT: If patient was referred TO this OPD, accept them fully
+    # Update their status to IN_OPD and clear referral fields (they're now managed here)
+    if (next_patient.patient.current_status == PatientStatus.REFERRED and 
+        next_patient.patient.referred_to == opd_type):
+        # Patient is being accepted in destination OPD
+        next_patient.patient.current_status = PatientStatus.IN_OPD
+        next_patient.patient.allocated_opd = opd_type  # Update primary OPD
+        # Clear referral fields (referral is complete)
+        next_patient.patient.referred_from = None
+        next_patient.patient.referred_to = None
+    elif next_patient.patient.current_status != PatientStatus.REFERRED:
+        # Regular patient (not referred)
         next_patient.patient.current_status = PatientStatus.IN_OPD
     
     # Log patient flow
@@ -449,10 +490,19 @@ async def call_out_of_order(
     if queue_entry.status not in [PatientStatus.PENDING, PatientStatus.REFERRED, PatientStatus.DILATED]:
         raise HTTPException(status_code=400, detail=f"Patient cannot be called (status: {queue_entry.status})")
     
-    # Check if there's already a patient in OPD
-    current_in_opd = db.query(Queue).filter(
+    # Check if there's already a patient in OPD (with same exclusions as call_next)
+    current_in_opd = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status == PatientStatus.IN_OPD
+        Queue.status == PatientStatus.IN_OPD,
+        # IMPORTANT: Exclude patients with REFERRED status
+        Patient.current_status != PatientStatus.REFERRED
+    ).filter(
+        # Also exclude patients who were referred out
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
     ).first()
     
     if current_in_opd:
@@ -467,7 +517,18 @@ async def call_out_of_order(
     
     # Update patient status and room
     patient.current_room = f"opd_{opd_type}"
-    if patient.current_status != PatientStatus.REFERRED:
+    
+    # IMPORTANT: If patient was referred TO this OPD, accept them fully
+    if (patient.current_status == PatientStatus.REFERRED and 
+        patient.referred_to == opd_type):
+        # Patient is being accepted in destination OPD
+        patient.current_status = PatientStatus.IN_OPD
+        patient.allocated_opd = opd_type  # Update primary OPD
+        # Clear referral fields (referral is complete)
+        patient.referred_from = None
+        patient.referred_to = None
+    elif patient.current_status != PatientStatus.REFERRED:
+        # Regular patient (not referred)
         patient.current_status = PatientStatus.IN_OPD
     
     # Log patient flow

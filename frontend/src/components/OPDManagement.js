@@ -48,7 +48,7 @@ const OPDManagement = () => {
   const navigate = useNavigate();
   const { joinOPD, leaveOPD, onQueueUpdate, removeAllListeners } = useSocket();
   const { showSuccess, showError } = useNotification();
-  const { activeOPDs, getOPDByCode } = useOPD();
+  const { activeOPDs, allActiveOPDs, getOPDByCode } = useOPD();
   const [selectedOpd, setSelectedOpd] = useState('');
   const [queue, setQueue] = useState([]);
   const [stats, setStats] = useState(null);
@@ -798,20 +798,20 @@ const OPDManagement = () => {
               </Typography>
             )}
             
-            {actionDialog.type === 'refer' && (
-              <FormControl fullWidth sx={{ mt: 2 }}>
-                <InputLabel>Refer to OPD</InputLabel>
-                <Select
-                  value={actionDialog.targetOpd || ''}
-                  onChange={(e) => setActionDialog(prev => ({ ...prev, targetOpd: e.target.value }))}
-                  label="Refer to OPD"
-                >
-                  {activeOPDs.filter(opd => opd.opd_code !== selectedOpd).map((opd) => (
-                    <MenuItem key={opd.opd_code} value={opd.opd_code}>
-                      {opd.opd_name}
-                    </MenuItem>
-                  ))}
-                </Select>
+             {actionDialog.type === 'refer' && (
+               <FormControl fullWidth sx={{ mt: 2 }}>
+                 <InputLabel>Refer to OPD</InputLabel>
+                 <Select
+                   value={actionDialog.targetOpd || ''}
+                   onChange={(e) => setActionDialog(prev => ({ ...prev, targetOpd: e.target.value }))}
+                   label="Refer to OPD"
+                 >
+                   {allActiveOPDs.filter(opd => opd.opd_code !== selectedOpd).map((opd) => (
+                     <MenuItem key={opd.opd_code} value={opd.opd_code}>
+                       {opd.opd_name}
+                     </MenuItem>
+                   ))}
+                 </Select>
               <TextField
                   label="Remarks (Optional)"
                   multiline
