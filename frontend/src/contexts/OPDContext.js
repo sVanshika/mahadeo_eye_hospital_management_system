@@ -13,7 +13,9 @@ export const useOPD = () => {
 };
 
 export const OPDProvider = ({ children }) => {
-  const { user, allowedOPDs, hasOPDAccess } = useAuth();
+  const auth = useAuth();
+  const user = auth?.user || null;
+  const allowedOPDs = auth?.allowedOPDs || [];
   const [opds, setOpds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -130,7 +132,7 @@ export const OPDProvider = ({ children }) => {
     opds,
     activeOPDs: getActiveOPDs(),
     allActiveOPDs: getAllActiveOPDs(), // All OPDs without filtering
-    loading,
+    loading, // Expose loading state for validation timing
     error,
     
     fetchOPDs,
