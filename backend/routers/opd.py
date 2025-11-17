@@ -26,6 +26,7 @@ class QueueResponse(BaseModel):
     phone: Optional[str] = None
     is_referred: bool
     referred_from: Optional[str] = None
+    dilation_flag: bool
 
     class Config:
         from_attributes = True
@@ -40,6 +41,9 @@ class OPDStats(BaseModel):
     referred_patients: int
     completed_today: int
     avg_waiting_time: Optional[float]
+    
+class DilatePatientRequest(BaseModel):
+    remarks: Optional[str] = None
 
 @router.get("/{opd_type}/queue", response_model=List[QueueResponse])
 async def get_opd_queue(
@@ -140,7 +144,8 @@ async def get_opd_queue(
                 age=entry.patient.age,
                 phone=entry.patient.phone,
                 is_referred=(entry.patient.current_status == PatientStatus.REFERRED),
-                referred_from=entry.patient.referred_from
+                referred_from=entry.patient.referred_from,
+                dilation_flag=entry.patient.dilation_flag
             )
             queue_data.append(queue_item)
             print(f"  ✓ Added to queue response")
@@ -273,10 +278,13 @@ async def call_next_patient(
 async def dilate_patient(
     opd_type: str,
     patient_id: int,
+    payload: DilatePatientRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     opd_type = opd_type.lower()
+    remarks = payload.remarks
+    print("dilate patient: {remarks}")
     
     # Check OPD access
     check_opd_access(current_user, opd_type, db)
@@ -310,7 +318,7 @@ async def dilate_patient(
         from_room=f"opd_{opd_type}",
         to_room="dilation_area",
         status=PatientStatus.DILATED,
-        notes=f"Patient given dilation drops."
+        notes=remarks
     )
     db.add(flow_entry)
     db.commit()

@@ -81,6 +81,8 @@ class Patient(Base):
     referred_from = Column(String)
     referred_to = Column(String)
     completed_at = Column(DateTime)
+    dilation_flag = Column(Boolean, default=False)
+
 
 class Queue(Base):
     __tablename__ = "queues"
