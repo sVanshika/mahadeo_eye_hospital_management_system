@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -28,82 +28,43 @@ const DisplayScreen = ({ opdCode = null }) => {
   const navigate = useNavigate();
   const { joinDisplay, leaveDisplay, onDisplayUpdate, removeAllListeners } = useSocket();
   const { allActiveOPDs, getOPDByCode, loading: opdsLoading } = useOPD();
-  const { user, allowedOPDs } = useAuth();
+  const { user, allowedOPDs, loading: authLoading } = useAuth();
   const [displayData, setDisplayData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const isMountedRef = React.useRef(true);
   const hasValidatedRef = React.useRef(false);
-  const hasRedirectedRef = React.useRef(false);
 
+  // Reset validation when opdCode changes
   useEffect(() => {
     isMountedRef.current = true;
     hasValidatedRef.current = false;
+    setLoading(true);
+    setError(null);
     
     return () => {
       isMountedRef.current = false;
     };
   }, [opdCode]);
 
+  // Auto-redirect nurses with single OPD access to their specific display
   useEffect(() => {
-    // Wait for OPDs to load before validating
-    if (opdsLoading || hasValidatedRef.current) {
+    // Wait for auth and OPDs to load
+    if (authLoading || opdsLoading) {
       return;
     }
     
-    // Auto-redirect nurses with single OPD access to their specific display
-    if (!opdCode && !hasRedirectedRef.current && user && user.role === 'nursing' && allowedOPDs && allowedOPDs.length === 1) {
-      hasRedirectedRef.current = true;
+    // Only redirect if on /display (no specific opdCode) and user is a nurse with single OPD
+    if (!opdCode && user && user.role === 'nursing' && allowedOPDs && allowedOPDs.length === 1) {
       const singleOPD = allowedOPDs[0].toLowerCase();
       console.log(`🔀 Nurse with single OPD access, redirecting to: /display/${singleOPD}`);
-      navigate(`/display/${singleOPD}`);
-      return;
+      navigate(`/display/${singleOPD}`, { replace: true });
     }
-    
-    // Normalize opdCode to LOWERCASE to match database (opd1, opd2, opd3)
-    const normalizedOpdCode = opdCode?.toLowerCase();
-    
-    // Validate OPD code if single OPD mode (check against ALL active OPDs, not filtered ones)
-    if (normalizedOpdCode && !opdsLoading) {
-      const opdExists = getOPDByCode(normalizedOpdCode);
-      if (!opdExists && allActiveOPDs.length > 0) {
-        setError(`Invalid OPD: ${normalizedOpdCode} does not exist`);
-        setLoading(false);
-        hasValidatedRef.current = true;
-        return;
-      }
-    }
-    
-    hasValidatedRef.current = true;
-    
-    fetchDisplayData();
-    joinDisplay();
-    
-    // Set up real-time updates
-    onDisplayUpdate((data) => {
-      console.log('🔄 Display update triggered, fetching fresh data...');
-      // If single OPD mode, only update if it's for this OPD or if opdCode not in event
-      if (normalizedOpdCode && data?.opdCode) {
-        const eventOpdCode = data.opdCode?.toLowerCase();
-        if (eventOpdCode && eventOpdCode !== normalizedOpdCode) {
-          return; // Ignore updates for other OPDs
-        }
-      }
-      fetchDisplayData();
-    });
+  }, [opdCode, user, allowedOPDs, authLoading, opdsLoading, navigate]);
 
-    // Auto-refresh every 5 seconds (reduced from 30s for better responsiveness)
-    const interval = setInterval(fetchDisplayData, 5000);
-
-    return () => {
-      leaveDisplay();
-      removeAllListeners();
-      clearInterval(interval);
-    };
-  }, [opdCode, opdsLoading, allActiveOPDs.length, user, allowedOPDs, navigate]);
-
-  const fetchDisplayData = async () => {
+  // Fetch display data (wrapped in useCallback to prevent stale closures)
+  const fetchDisplayData = useCallback(async () => {
     try {
       // Normalize opdCode to LOWERCASE to match database (opd1, opd2, opd3)
       const normalizedOpdCode = opdCode?.toLowerCase();
@@ -119,7 +80,11 @@ const DisplayScreen = ({ opdCode = null }) => {
         }
         
         // Wrap in opds array for consistent data structure
-        setDisplayData({ opds: [response.data], isSingleOPD: true });
+        if (isMountedRef.current) {
+          setDisplayData({ opds: [response.data], isSingleOPD: true });
+          setLastUpdated(new Date());
+          setError(null);
+        }
       } else {
         // Fetch all OPDs data
         response = await apiClient.get('/display/all');
@@ -139,13 +104,11 @@ const DisplayScreen = ({ opdCode = null }) => {
           );
         }
         
-        setDisplayData({ ...response.data, opds: filteredOPDs, isSingleOPD: false });
-      }
-      
-      // Only update state if component still mounted
-      if (isMountedRef.current) {
-        setLastUpdated(new Date());
-        setError(null); // Clear any previous errors
+        if (isMountedRef.current) {
+          setDisplayData({ ...response.data, opds: filteredOPDs, isSingleOPD: false });
+          setLastUpdated(new Date());
+          setError(null);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch display data:', error);
@@ -157,7 +120,67 @@ const DisplayScreen = ({ opdCode = null }) => {
         setLoading(false);
       }
     }
-  };
+  }, [opdCode, user, allowedOPDs]);
+
+  // Main effect: Validate, fetch data, and set up real-time updates
+  useEffect(() => {
+    // Wait for OPDs to load before proceeding
+    if (opdsLoading || authLoading || hasValidatedRef.current) {
+      return;
+    }
+    
+    // Normalize opdCode to LOWERCASE to match database (opd1, opd2, opd3)
+    const normalizedOpdCode = opdCode?.toLowerCase();
+    
+    // Validate OPD code if single OPD mode (check against ALL active OPDs, not filtered ones)
+    if (normalizedOpdCode && !opdsLoading) {
+      const opdExists = getOPDByCode(normalizedOpdCode);
+      if (!opdExists && allActiveOPDs.length > 0) {
+        console.error(`❌ Invalid OPD: ${normalizedOpdCode} does not exist`);
+        setError(`Invalid OPD: ${normalizedOpdCode} does not exist`);
+        setLoading(false);
+        hasValidatedRef.current = true;
+        return;
+      }
+    }
+    
+    hasValidatedRef.current = true;
+    console.log(`✅ Validation passed for ${normalizedOpdCode || 'all OPDs'}`);
+    
+    // Initial data fetch
+    fetchDisplayData();
+    
+    // Join display room for real-time updates
+    joinDisplay();
+    
+    // Set up real-time updates
+    onDisplayUpdate((data) => {
+      console.log('🔄 Display update triggered, fetching fresh data...', data);
+      // If single OPD mode, only update if it's for this OPD or if opdCode not in event
+      if (normalizedOpdCode && data?.opdCode) {
+        const eventOpdCode = data.opdCode?.toLowerCase();
+        if (eventOpdCode && eventOpdCode !== normalizedOpdCode) {
+          console.log(`⏭️ Ignoring update for ${eventOpdCode}, current OPD is ${normalizedOpdCode}`);
+          return; // Ignore updates for other OPDs
+        }
+      }
+      fetchDisplayData();
+    });
+
+    // Auto-refresh every 5 seconds (reduced from 30s for better responsiveness)
+    const interval = setInterval(() => {
+      console.log('⏰ Auto-refresh triggered');
+      fetchDisplayData();
+    }, 5000);
+
+    // Cleanup
+    return () => {
+      console.log('🧹 Cleaning up display screen');
+      leaveDisplay();
+      removeAllListeners();
+      clearInterval(interval);
+    };
+  }, [opdCode, opdsLoading, authLoading, allActiveOPDs.length, fetchDisplayData, joinDisplay, leaveDisplay, onDisplayUpdate, removeAllListeners, getOPDByCode]);
 
   const getStatusColor = (status) => {
     const statusColors = {
@@ -188,8 +211,8 @@ const DisplayScreen = ({ opdCode = null }) => {
     return `${waitingTime} min`;
   };
 
-  // Show loading while OPDs are loading OR display data is loading
-  if (loading || opdsLoading) {
+  // Show loading while OPDs are loading OR display data is loading OR auth is loading
+  if (loading || opdsLoading || authLoading) {
     return (
       <Box
         display="flex"
@@ -204,7 +227,7 @@ const DisplayScreen = ({ opdCode = null }) => {
             Loading Display...
           </Typography>
           <Typography variant="h6" color="text.secondary" sx={{ mt: 2, fontSize: '1.5rem' }}>
-            {opdsLoading ? 'Loading OPD configuration...' : 'Loading queue data...'}
+            {authLoading ? 'Loading user data...' : opdsLoading ? 'Loading OPD configuration...' : 'Loading queue data...'}
           </Typography>
         </Paper>
       </Box>
