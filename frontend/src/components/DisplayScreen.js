@@ -306,7 +306,7 @@ const DisplayScreen = ({ opdCode = null }) => {
               <Box display="flex" alignItems="center" justifyContent="center" my={4}>
                 <Box sx={{ textAlign: 'center' }}>
                   <Typography variant="h2" component="div" sx={{ fontWeight: 'bold', fontSize: '5rem', letterSpacing: '2px' }}>
-                    {opd.current_patient.token_number}
+                    {opd.current_patient.token_number.slice(-3)}
                   </Typography>
                   <Typography 
                     variant="h3" 
@@ -396,7 +396,7 @@ const DisplayScreen = ({ opdCode = null }) => {
                               mb: 0.5
                             }}
                           >
-                            {patient.token_number}
+                            {patient.token_number.slice(-3)}
                           </Typography>
                           <Typography 
                             variant="h5" 
@@ -512,11 +512,9 @@ const DisplayScreen = ({ opdCode = null }) => {
                       </Typography>
                       <Box>
                         <Typography variant="h4" component="div" sx={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                          {opd.current_patient.token_number}
+                          {opd.current_patient.token_number.slice(-3)} - {opd.current_patient.patient_name}
                         </Typography>
-                        <Typography variant="h6" sx={{ mt: 1 }}>
-                          {opd.current_patient.patient_name}
-                        </Typography>
+                        
                       </Box>
                     </Paper>
                   )}
@@ -550,20 +548,9 @@ const DisplayScreen = ({ opdCode = null }) => {
                                   lineHeight: 1.3
                                 }}
                               >
-                                {patient.token_number}
+                                {patient.token_number.slice(-3)} - {patient.patient_name}
                               </Typography>
-                              <Typography 
-                                variant="body2" 
-                                color="text.secondary"
-                                sx={{ 
-                                  overflow: 'hidden', 
-                                  textOverflow: 'ellipsis', 
-                                  whiteSpace: 'nowrap',
-                                  lineHeight: 1.3
-                                }}
-                              >
-                                {patient.patient_name}
-                              </Typography>
+                              
                             </Box>
                             
                             {/* Status Chips */}
