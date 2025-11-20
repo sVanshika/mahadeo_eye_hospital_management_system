@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -19,18 +20,22 @@ import {
 } from '@mui/icons-material';
 import { useSocket } from '../contexts/SocketContext';
 import { useOPD } from '../contexts/OPDContext';
+import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../apiClient';
 // Navbar removed - public display doesn't need authentication UI
 
 const DisplayScreen = ({ opdCode = null }) => {
+  const navigate = useNavigate();
   const { joinDisplay, leaveDisplay, onDisplayUpdate, removeAllListeners } = useSocket();
   const { allActiveOPDs, getOPDByCode, loading: opdsLoading } = useOPD();
+  const { user, allowedOPDs } = useAuth();
   const [displayData, setDisplayData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const isMountedRef = React.useRef(true);
   const hasValidatedRef = React.useRef(false);
+  const hasRedirectedRef = React.useRef(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -44,6 +49,15 @@ const DisplayScreen = ({ opdCode = null }) => {
   useEffect(() => {
     // Wait for OPDs to load before validating
     if (opdsLoading || hasValidatedRef.current) {
+      return;
+    }
+    
+    // Auto-redirect nurses with single OPD access to their specific display
+    if (!opdCode && !hasRedirectedRef.current && user && user.role === 'nursing' && allowedOPDs && allowedOPDs.length === 1) {
+      hasRedirectedRef.current = true;
+      const singleOPD = allowedOPDs[0].toLowerCase();
+      console.log(`🔀 Nurse with single OPD access, redirecting to: /display/${singleOPD}`);
+      navigate(`/display/${singleOPD}`);
       return;
     }
     
@@ -87,7 +101,7 @@ const DisplayScreen = ({ opdCode = null }) => {
       removeAllListeners();
       clearInterval(interval);
     };
-  }, [opdCode, opdsLoading, allActiveOPDs.length]);
+  }, [opdCode, opdsLoading, allActiveOPDs.length, user, allowedOPDs, navigate]);
 
   const fetchDisplayData = async () => {
     try {
@@ -114,7 +128,18 @@ const DisplayScreen = ({ opdCode = null }) => {
           throw new Error('Invalid response format from server');
         }
         
-        setDisplayData({ ...response.data, isSingleOPD: false });
+        // Filter OPDs based on user role
+        let filteredOPDs = response.data.opds;
+        
+        // If user is logged in as a nurse, show only their assigned OPDs
+        if (user && user.role === 'nursing' && allowedOPDs && allowedOPDs.length > 0) {
+          const allowedOPDsLower = allowedOPDs.map(opd => opd.toLowerCase());
+          filteredOPDs = response.data.opds.filter(opdData => 
+            allowedOPDsLower.includes(opdData.opd_code?.toLowerCase())
+          );
+        }
+        
+        setDisplayData({ ...response.data, opds: filteredOPDs, isSingleOPD: false });
       }
       
       // Only update state if component still mounted
