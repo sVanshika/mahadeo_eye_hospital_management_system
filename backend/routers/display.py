@@ -82,11 +82,12 @@ async def get_opd_display_data(
             is_dilated=current_patient_query.patient.is_dilated
         )
     
-    # Get next patients (PENDING status)
+    # Get next patients (PENDING or REFERRED status)
+    # Include referred patients who are waiting in this OPD
     # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
     next_patients_query = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status == PatientStatus.PENDING,
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.REFERRED]),  # Include REFERRED patients
         Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).filter(
         # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
@@ -96,6 +97,10 @@ async def get_opd_display_data(
             (Patient.referred_to.isnot(None))
         )
     ).order_by(Queue.position).limit(5).all()
+    
+    print(f"✓ Found {len(next_patients_query)} next patients in queue")
+    for idx, entry in enumerate(next_patients_query, 1):
+        print(f"  {idx}. {entry.patient.token_number} - {entry.patient.name} (Status: {entry.status}, Referred from: {entry.patient.referred_from})")
     
     next_patients = []
     for entry in next_patients_query:
@@ -112,11 +117,11 @@ async def get_opd_display_data(
             is_dilated=entry.patient.is_dilated
         ))
     
-    # Get total patients in queue
+    # Get total patients in queue (include REFERRED patients)
     # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
     total_patients = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED]),
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]),
         Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).filter(
         # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
@@ -126,6 +131,9 @@ async def get_opd_display_data(
             (Patient.referred_to.isnot(None))
         )
     ).count()
+    
+    print(f"✓ Total patients in {opd_type}: {total_patients}")
+    print(f"{'='*60}\n")
     
     # Calculate estimated wait time (simplified)
     estimated_wait_time = None
