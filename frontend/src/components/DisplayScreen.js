@@ -48,7 +48,8 @@ const DisplayScreen = ({ opdCode = null }) => {
     };
   }, [opdCode]);
 
-  // Auto-redirect nurses with single OPD access to their specific display
+  // Auto-redirect nurses with single OPD access to their specific display (better UX)
+  // But if they have multiple OPDs or no OPDs, show all OPDs like reg/admin
   useEffect(() => {
     // Wait for auth and OPDs to load
     if (authLoading || opdsLoading) {
@@ -93,16 +94,9 @@ const DisplayScreen = ({ opdCode = null }) => {
           throw new Error('Invalid response format from server');
         }
         
-        // Filter OPDs based on user role
+        // Display page shows all OPDs for all users (same as reg/admin)
+        // OPD filtering is only applied in OPD Management page, not display page
         let filteredOPDs = response.data.opds;
-        
-        // If user is logged in as a nurse, show only their assigned OPDs
-        if (user && user.role === 'nursing' && allowedOPDs && allowedOPDs.length > 0) {
-          const allowedOPDsLower = allowedOPDs.map(opd => opd.toLowerCase());
-          filteredOPDs = response.data.opds.filter(opdData => 
-            allowedOPDsLower.includes(opdData.opd_code?.toLowerCase())
-          );
-        }
         
         if (isMountedRef.current) {
           setDisplayData({ ...response.data, opds: filteredOPDs, isSingleOPD: false });
@@ -120,7 +114,7 @@ const DisplayScreen = ({ opdCode = null }) => {
         setLoading(false);
       }
     }
-  }, [opdCode, user, allowedOPDs]);
+  }, [opdCode]);
 
   // Main effect: Validate, fetch data, and set up real-time updates
   useEffect(() => {
