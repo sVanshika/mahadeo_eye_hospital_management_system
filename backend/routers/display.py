@@ -38,6 +38,9 @@ async def get_opd_display_data(
     opd_type: str,
     db: Session = Depends(get_db)
 ):
+    # Normalize OPD code to lowercase for database lookup
+    opd_type = opd_type.lower()
+    
     print(f"\n{'='*60}")
     print(f"=== GET DISPLAY DATA FOR OPD: {opd_type} ===")
     print(f"{'='*60}")

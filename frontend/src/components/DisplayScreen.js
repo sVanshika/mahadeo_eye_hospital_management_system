@@ -16,27 +16,66 @@ import {
 } from '@mui/material';
 import {
   LocalHospital,
-  CheckCircle,
 } from '@mui/icons-material';
 import { useSocket } from '../contexts/SocketContext';
 import { useOPD } from '../contexts/OPDContext';
 import apiClient from '../apiClient';
-import Navbar from './Navbar';
+// Navbar removed - public display doesn't need authentication UI
 
-const DisplayScreen = () => {
+const DisplayScreen = ({ opdCode = null }) => {
   const { joinDisplay, leaveDisplay, onDisplayUpdate, removeAllListeners } = useSocket();
-  const { activeOPDs, getOPDByCode } = useOPD();
+  const { allActiveOPDs, getOPDByCode, loading: opdsLoading } = useOPD();
   const [displayData, setDisplayData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const isMountedRef = React.useRef(true);
+  const hasValidatedRef = React.useRef(false);
 
   useEffect(() => {
+    isMountedRef.current = true;
+    hasValidatedRef.current = false;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [opdCode]);
+
+  useEffect(() => {
+    // Wait for OPDs to load before validating
+    if (opdsLoading || hasValidatedRef.current) {
+      return;
+    }
+    
+    // Normalize opdCode to LOWERCASE to match database (opd1, opd2, opd3)
+    const normalizedOpdCode = opdCode?.toLowerCase();
+    
+    // Validate OPD code if single OPD mode (check against ALL active OPDs, not filtered ones)
+    if (normalizedOpdCode && !opdsLoading) {
+      const opdExists = getOPDByCode(normalizedOpdCode);
+      if (!opdExists && allActiveOPDs.length > 0) {
+        setError(`Invalid OPD: ${normalizedOpdCode} does not exist`);
+        setLoading(false);
+        hasValidatedRef.current = true;
+        return;
+      }
+    }
+    
+    hasValidatedRef.current = true;
+    
     fetchDisplayData();
     joinDisplay();
     
     // Set up real-time updates
-    onDisplayUpdate(() => {
+    onDisplayUpdate((data) => {
       console.log('🔄 Display update triggered, fetching fresh data...');
+      // If single OPD mode, only update if it's for this OPD or if opdCode not in event
+      if (normalizedOpdCode && data?.opdCode) {
+        const eventOpdCode = data.opdCode?.toLowerCase();
+        if (eventOpdCode && eventOpdCode !== normalizedOpdCode) {
+          return; // Ignore updates for other OPDs
+        }
+      }
       fetchDisplayData();
     });
 
@@ -48,17 +87,50 @@ const DisplayScreen = () => {
       removeAllListeners();
       clearInterval(interval);
     };
-  }, []);
+  }, [opdCode, opdsLoading, allActiveOPDs.length]);
 
   const fetchDisplayData = async () => {
     try {
-      const response = await apiClient.get('/display/all');
-      setDisplayData(response.data);
-      setLastUpdated(new Date());
+      // Normalize opdCode to LOWERCASE to match database (opd1, opd2, opd3)
+      const normalizedOpdCode = opdCode?.toLowerCase();
+      
+      let response;
+      if (normalizedOpdCode) {
+        // Fetch single OPD data
+        response = await apiClient.get(`/display/opd/${normalizedOpdCode}`);
+        
+        // Validate response data
+        if (!response.data) {
+          throw new Error(`No data returned for ${normalizedOpdCode}`);
+        }
+        
+        // Wrap in opds array for consistent data structure
+        setDisplayData({ opds: [response.data], isSingleOPD: true });
+      } else {
+        // Fetch all OPDs data
+        response = await apiClient.get('/display/all');
+        
+        if (!response.data || !response.data.opds) {
+          throw new Error('Invalid response format from server');
+        }
+        
+        setDisplayData({ ...response.data, isSingleOPD: false });
+      }
+      
+      // Only update state if component still mounted
+      if (isMountedRef.current) {
+        setLastUpdated(new Date());
+        setError(null); // Clear any previous errors
+      }
     } catch (error) {
       console.error('Failed to fetch display data:', error);
+      if (isMountedRef.current) {
+        setError(error.response?.data?.detail || error.message || 'Failed to load display data');
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -91,7 +163,8 @@ const DisplayScreen = () => {
     return `${waitingTime} min`;
   };
 
-  if (loading) {
+  // Show loading while OPDs are loading OR display data is loading
+  if (loading || opdsLoading) {
     return (
       <Box
         display="flex"
@@ -99,23 +172,264 @@ const DisplayScreen = () => {
         alignItems="center"
         minHeight="100vh"
         flexDirection="column"
+        sx={{ bgcolor: '#f5f5f5' }}
       >
-        <Typography variant="h4" gutterBottom>
-          Loading Display Data...
-        </Typography>
+        <Paper elevation={3} sx={{ p: 6, textAlign: 'center' }}>
+          <Typography variant="h4" gutterBottom sx={{ fontSize: '3rem', fontWeight: 'bold' }}>
+            Loading Display...
+          </Typography>
+          <Typography variant="h6" color="text.secondary" sx={{ mt: 2, fontSize: '1.5rem' }}>
+            {opdsLoading ? 'Loading OPD configuration...' : 'Loading queue data...'}
+          </Typography>
+        </Paper>
       </Box>
     );
   }
 
+  // Error State
+  if (error) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+        flexDirection="column"
+        sx={{ bgcolor: '#f5f5f5', p: 4 }}
+      >
+        <Paper elevation={3} sx={{ p: 6, maxWidth: 600, textAlign: 'center', bgcolor: 'error.light' }}>
+          <Typography variant="h3" gutterBottom color="error.dark" sx={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>
+            ERROR
+          </Typography>
+          <Typography variant="h6" sx={{ mt: 2, mb: 4, color: 'error.dark' }}>
+            {error}
+          </Typography>
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              Please check:
+            </Typography>
+            <Typography variant="body2" component="ul" sx={{ textAlign: 'left', ml: 4 }}>
+              <li>The OPD code is correct (OPD1, OPD2, or OPD3)</li>
+              <li>The backend server is running</li>
+              <li>Your network connection is stable</li>
+            </Typography>
+          </Box>
+        </Paper>
+      </Box>
+    );
+  }
+
+  // Single OPD Full-Screen Layout
+  if (displayData?.isSingleOPD && displayData?.opds?.[0]) {
+    const opd = displayData.opds[0];
+    const opdName = getOPDByCode(opd.opd_type)?.opd_name || opd.opd_type;
+  return (
+    <Box sx={{ flexGrow: 1, bgcolor: '#f5f5f5', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Simple Header for LED Display */}
+      <Paper elevation={3} sx={{ bgcolor: 'primary.main', color: 'white', py: 3, mb: 2, textAlign: 'center' }}>
+        <Typography variant="h3" sx={{ fontWeight: 'bold', fontSize: '3rem', letterSpacing: '0.5px' }}>
+          Eye Hospital - {opdName}
+        </Typography>
+      </Paper>
+
+      <Container maxWidth={false} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', py: 2, px: 4, width: '100%' }}>
+          {lastUpdated && (
+            <Typography variant="h6" color="text.secondary" align="center" gutterBottom>
+              Last Updated: {lastUpdated.toLocaleTimeString()}
+            </Typography>
+          )}
+
+          {/* Current Patient - Large Display */}
+          {opd.current_patient ? (
+            <Paper
+              elevation={6}
+              sx={{
+                p: 6,
+                mb: 4,
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                textAlign: 'center',
+                width: '100%',
+              }}
+            >
+              <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', fontSize: '2.5rem', letterSpacing: '1px' }}>
+                CURRENTLY BEING SERVED
+              </Typography>
+              <Box display="flex" alignItems="center" justifyContent="center" my={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h2" component="div" sx={{ fontWeight: 'bold', fontSize: '5rem', letterSpacing: '2px' }}>
+                    {opd.current_patient.token_number}
+                  </Typography>
+                  <Typography 
+                    variant="h3" 
+                    sx={{ 
+                      mt: 2, 
+                      fontSize: '3rem',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '90%',
+                      mx: 'auto',
+                      letterSpacing: '1px'
+                    }}
+                  >
+                    {opd.current_patient.patient_name}
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+          ) : (
+            <Paper
+              elevation={6}
+              sx={{
+                p: 6,
+                mb: 4,
+                bgcolor: 'grey.300',
+                color: 'text.primary',
+                textAlign: 'center',
+              }}
+            >
+              <Typography variant="h3" sx={{ fontWeight: 'bold', fontSize: '3rem' }}>
+                No Patient Currently Being Served
+              </Typography>
+            </Paper>
+          )}
+
+          {/* Next Patients - Large List */}
+          <Card sx={{ flexGrow: 1, width: '100%' }}>
+            <CardContent sx={{ px: 4 }}>
+              <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', fontSize: '2.5rem', mb: 3, letterSpacing: '1px' }}>
+                NEXT IN QUEUE ({opd.next_patients?.length || 0})
+              </Typography>
+              
+              {opd.next_patients && opd.next_patients.length > 0 ? (
+                <List sx={{ width: '100%' }}>
+                  {opd.next_patients.map((patient, index) => (
+                    <React.Fragment key={index}>
+                      <ListItem 
+                        sx={{ 
+                          py: 3,
+                          px: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 3
+                        }}
+                      >
+                        {/* Position Number */}
+                        <Box 
+                          sx={{ 
+                            minWidth: '80px',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Typography 
+                            variant="h3" 
+                            color="primary" 
+                            sx={{ 
+                              fontWeight: 'bold', 
+                              fontSize: '3rem',
+                              lineHeight: 1
+                            }}
+                          >
+                            {patient.position}
+                          </Typography>
+                        </Box>
+
+                        {/* Patient Info */}
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                          <Typography 
+                            variant="h4" 
+                            sx={{ 
+                              fontSize: '2.5rem', 
+                              fontWeight: 'bold',
+                              lineHeight: 1.2,
+                              mb: 0.5
+                            }}
+                          >
+                            {patient.token_number}
+                          </Typography>
+                          <Typography 
+                            variant="h5" 
+                            sx={{ 
+                              fontSize: '2rem', 
+                              color: 'text.secondary',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              lineHeight: 1.2
+                            }}
+                          >
+                            {patient.patient_name}
+                          </Typography>
+                        </Box>
+
+                        {/* Status Chips */}
+                        <Box display="flex" alignItems="center" gap={2} sx={{ flexShrink: 0 }}>
+                          <Chip
+                            label={getStatusLabel(patient.status)}
+                            color={getStatusColor(patient.status)}
+                            sx={{ 
+                              fontSize: '1.5rem', 
+                              padding: '24px 16px', 
+                              height: 'auto',
+                              fontWeight: 'bold'
+                            }}
+                          />
+                          {patient.is_dilated && (
+                            <Chip
+                              label="Dilated"
+                              color="secondary"
+                              sx={{ 
+                                fontSize: '1.5rem', 
+                                padding: '24px 16px', 
+                                height: 'auto',
+                                fontWeight: 'bold'
+                              }}
+                            />
+                          )}
+                        </Box>
+                      </ListItem>
+                      {index < opd.next_patients.length - 1 && <Divider />}
+                    </React.Fragment>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="h5" color="text.secondary" align="center" sx={{ py: 4, fontSize: '2rem' }}>
+                  No patients in queue
+                </Typography>
+              )}
+
+              {/* Queue Statistics */}
+              <Box mt={4} p={3} bgcolor="grey.100" borderRadius={2}>
+                <Typography variant="h5" color="text.primary" sx={{ fontSize: '2rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                  TOTAL PATIENTS: {opd.total_patients}
+                </Typography>
+                {opd.estimated_wait_time && (
+                  <Typography variant="h5" color="text.primary" sx={{ fontSize: '2rem', mt: 1, letterSpacing: '0.5px' }}>
+                    EST. WAIT TIME: {opd.estimated_wait_time} minutes
+                  </Typography>
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+        </Container>
+      </Box>
+    );
+  }
+
+  // All OPDs Grid Layout (Original)
   return (
     <Box sx={{ flexGrow: 1, bgcolor: '#f5f5f5', minHeight: '100vh' }}>
-      <Navbar 
-        onRefresh={fetchDisplayData} 
-        pageTitle="Patient Queue Display"
-        showRefresh={true}
-      />
+      {/* Simple Header for LED Display */}
+      <Paper elevation={3} sx={{ bgcolor: 'primary.main', color: 'white', py: 3, mb: 2, textAlign: 'center' }}>
+        <Typography variant="h3" sx={{ fontWeight: 'bold', fontSize: '3rem', letterSpacing: '0.5px' }}>
+          Eye Hospital - Patient Queue Display
+        </Typography>
+      </Paper>
 
-      <Container maxWidth="xl" sx={{ mt: 2, mb: 2 }}>
+      <Container maxWidth={false} sx={{ mt: 2, mb: 2, px: 3, width: '100%' }}>
         {lastUpdated && (
           <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
             Last Updated: {lastUpdated.toLocaleTimeString()}
@@ -145,46 +459,67 @@ const DisplayScreen = () => {
                         color: 'primary.contrastText',
                       }}
                     >
-                      <Typography variant="h6" gutterBottom>
-                        Currently Being Served
+                      <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                        CURRENTLY BEING SERVED
                       </Typography>
-                      <Box display="flex" alignItems="center" justifyContent="space-between">
-                        <Box>
-                          <Typography variant="h4" component="div">
-                            {opd.current_patient.token_number}
-                          </Typography>
-                          <Typography variant="h6">
-                            {opd.current_patient.patient_name}
-                          </Typography>
-                        </Box>
-                        <CheckCircle sx={{ fontSize: 40 }} />
+                      <Box>
+                        <Typography variant="h4" component="div" sx={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                          {opd.current_patient.token_number}
+                        </Typography>
+                        <Typography variant="h6" sx={{ mt: 1 }}>
+                          {opd.current_patient.patient_name}
+                        </Typography>
                       </Box>
-                      <Typography variant="body2" sx={{ mt: 1 }}>
-                        Waiting Time: {formatWaitingTime(opd.current_patient.waiting_time_minutes)}
-                      </Typography>
                     </Paper>
                   )}
 
                   {/* Next Patients */}
-                  <Typography variant="h6" gutterBottom>
-                    Next in Queue ({opd.next_patients.length})
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                    NEXT IN QUEUE ({opd.next_patients?.length || 0})
                   </Typography>
                   
-                  {opd.next_patients.length > 0 ? (
-                    <List dense>
+                  {opd.next_patients && opd.next_patients.length > 0 ? (
+                    <List dense sx={{ width: '100%' }}>
                       {opd.next_patients.map((patient, index) => (
                         <React.Fragment key={index}>
-                          <ListItem>
-                            <ListItemIcon>
-                              <Typography variant="h6" color="primary">
+                          <ListItem sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1 }}>
+                            {/* Position Number */}
+                            <Box sx={{ minWidth: '35px', display: 'flex', justifyContent: 'center' }}>
+                              <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
                                 {patient.position}
                               </Typography>
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={patient.token_number}
-                              secondary={patient.patient_name}
-                            />
-                            <Box display="flex" alignItems="center" gap={1}>
+                            </Box>
+                            
+                            {/* Patient Info */}
+                            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                              <Typography 
+                                variant="body1" 
+                                sx={{ 
+                                  fontWeight: 'bold',
+                                  overflow: 'hidden', 
+                                  textOverflow: 'ellipsis', 
+                                  whiteSpace: 'nowrap',
+                                  lineHeight: 1.3
+                                }}
+                              >
+                                {patient.token_number}
+                              </Typography>
+                              <Typography 
+                                variant="body2" 
+                                color="text.secondary"
+                                sx={{ 
+                                  overflow: 'hidden', 
+                                  textOverflow: 'ellipsis', 
+                                  whiteSpace: 'nowrap',
+                                  lineHeight: 1.3
+                                }}
+                              >
+                                {patient.patient_name}
+                              </Typography>
+                            </Box>
+                            
+                            {/* Status Chips */}
+                            <Box display="flex" alignItems="center" gap={1} sx={{ flexShrink: 0 }}>
                               <Chip
                                 label={getStatusLabel(patient.status)}
                                 color={getStatusColor(patient.status)}
