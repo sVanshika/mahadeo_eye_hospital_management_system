@@ -269,8 +269,11 @@ const DisplayScreen = ({ opdCode = null }) => {
     <Box sx={{ flexGrow: 1, bgcolor: '#f5f5f5', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Simple Header for LED Display */}
       <Paper elevation={3} sx={{ bgcolor: 'primary.main', color: 'white', py: 3, mb: 2, textAlign: 'center' }}>
-        <Typography variant="h3" sx={{ fontWeight: 'bold', fontSize: '3rem', letterSpacing: '0.5px' }}>
-          Eye Hospital - {opdName}
+        <Typography variant="h3" sx={{ fontWeight: 700, fontSize: '3rem', letterSpacing: '1px', fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif' }}>
+          Mahadeo Singhi Eye Hospital
+        </Typography>
+        <Typography variant="h4" sx={{ fontWeight: 500, fontSize: '2rem', letterSpacing: '0.5px', mt: 1, opacity: 0.95 }}>
+          {opdName}
         </Typography>
       </Paper>
 
@@ -440,8 +443,11 @@ const DisplayScreen = ({ opdCode = null }) => {
     <Box sx={{ flexGrow: 1, bgcolor: '#f5f5f5', minHeight: '100vh' }}>
       {/* Simple Header for LED Display */}
       <Paper elevation={3} sx={{ bgcolor: 'primary.main', color: 'white', py: 3, mb: 2, textAlign: 'center' }}>
-        <Typography variant="h3" sx={{ fontWeight: 'bold', fontSize: '3rem', letterSpacing: '0.5px' }}>
-          Eye Hospital - Patient Queue Display
+        <Typography variant="h3" sx={{ fontWeight: 700, fontSize: '3rem', letterSpacing: '1px', fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif' }}>
+          Mahadeo Singhi Eye Hospital
+        </Typography>
+        <Typography variant="h4" sx={{ fontWeight: 500, fontSize: '2rem', letterSpacing: '0.5px', mt: 1, opacity: 0.95 }}>
+          Patient Queue Display
         </Typography>
       </Paper>
 

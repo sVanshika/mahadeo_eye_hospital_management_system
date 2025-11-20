@@ -39,11 +39,21 @@ const Navbar = ({ onRefresh, showRefresh = true, pageTitle = "" }) => {
       <Toolbar>
         {/* Logo and Title */}
         <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-          <Avatar sx={{ mr: 1, bgcolor: 'secondary.main' }}>
+          <Avatar sx={{ mr: 1.5, bgcolor: 'secondary.main', width: 40, height: 40 }}>
             <LocalHospital />
           </Avatar>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>
-            Eye Hospital
+          <Typography 
+            variant="h6" 
+            component="div" 
+            sx={{ 
+              fontWeight: 600,
+              fontSize: '1.25rem',
+              letterSpacing: '0.5px',
+              fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+              textTransform: 'none'
+            }}
+          >
+            Mahadeo Singhi Eye Hospital
           </Typography>
         </Box>
 
