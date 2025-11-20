@@ -68,7 +68,6 @@ const OPDManagement = () => {
   useEffect(() => {
     // console.log('activeOPDs changed:', activeOPDs);
     // console.log('selectedOpd:', selectedOpd);
-    console.log("hasBeenDilated =", hasBeenDilated);
 
     if (activeOPDs.length > 0 && !selectedOpd) {
       console.log('Setting default OPD to:', activeOPDs[0].opd_code);
@@ -240,7 +239,10 @@ const OPDManagement = () => {
 
     try {
       if (type === 'dilate') {
-        await apiClient.post(`/opd/${selectedOpd}/dilate-patient/${patient.patient_id}`);
+        const remarks = actionDialog.remarks || '';
+        await apiClient.post(`/opd/${selectedOpd}/dilate-patient/${patient.patient_id}`,{
+          remarks: remarks
+        });
         showSuccess(`Patient ${patient.token_number} marked for dilation`);
       } else if (type === 'refer') {
         const targetOpd = actionDialog.targetOpd;
@@ -541,13 +543,15 @@ const OPDManagement = () => {
                               {patient.position}. {patient.token_number.split("-")[1]} - {patient.patient_name}
                             </span>
                             <span style={{ color: "#888", fontSize: "0.85rem" }}>
-                              | Waiting: {formatWaitingTime(patient.registration_time)}
+                              | Waiting: {formatWaitingTime(patient.registration_time)} {(patient.dilation_flag && (
+                                <span>| Dilated Patient</span>
+                              ))} 
                             </span>
-                            {hasBeenDilated[patient.patient_id] && (
+                            {/* {hasBeenDilated[patient.patient_id] && (
                               <span style={{ color: "#1976d2", fontSize: "0.85rem", fontWeight: "500" }}>
                                 | Dilated Patient
                               </span>
-                            )}
+                            )} */}
                           </Box>
 
                           {/* Status Chip on right of row 1 */}
@@ -724,6 +728,26 @@ const OPDManagement = () => {
                   <Typography variant="subtitle1" gutterBottom>
                     Referred FROM this OPD
                   </Typography>
+                  <Box
+                  sx={{maxHeight: "60vh", overflowY: "auto", pr: 1,
+
+                    "&::-webkit-scrollbar": {
+                      width: "8px",
+                    },
+                    "&::-webkit-scrollbar-track": {
+                      background: "#f1f1f1",
+                      borderRadius: "10px",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      background: "#b0b0b0",
+                      borderRadius: "10px",
+                    },
+                    "&::-webkit-scrollbar-thumb:hover": {
+                      background: "#888",
+                    }
+                  }}
+                >
+
                   <List>
                     {referredFromHere.length === 0 && (
                       <ListItem>
@@ -747,11 +771,36 @@ const OPDManagement = () => {
                       </ListItem>
                     ))}
                   </List>
+                
+                </Box>
+                
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="subtitle1" gutterBottom>
                     Referred TO this OPD
                   </Typography>
+
+                  <Box
+                  sx={{maxHeight: "60vh", overflowY: "auto", pr: 1,
+
+                    "&::-webkit-scrollbar": {
+                      width: "8px",
+                    },
+                    "&::-webkit-scrollbar-track": {
+                      background: "#f1f1f1",
+                      borderRadius: "10px",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      background: "#b0b0b0",
+                      borderRadius: "10px",
+                    },
+                    "&::-webkit-scrollbar-thumb:hover": {
+                      background: "#888",
+                    }
+                  }}
+                >
+
+
                   <List>
                     {referredToHere.length === 0 && (
                       <ListItem>
@@ -775,6 +824,8 @@ const OPDManagement = () => {
                       </ListItem>
                     ))}
                   </List>
+
+                </Box>
                 </Grid>
               </Grid>
             </CardContent>
@@ -825,9 +876,23 @@ const OPDManagement = () => {
             )}
             
             {actionDialog.type === 'dilate' && (
-              <Typography variant="body2" color="text.secondary">
-                Patient will be given dilation drops and wait 30-40 minutes before returning.
-              </Typography>
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Patient will be given dilation drops and wait 30-40 minutes before returning.
+                </Typography>
+                <TextField
+                  label="Remarks (Optional)"
+                  multiline
+                  rows={3}
+                  fullWidth
+                  sx={{ mt: 2 }}
+                  value={actionDialog.remarks || ''}
+                  onChange={(e) => setActionDialog(prev => ({ ...prev, remarks: e.target.value }))}
+                />
+              </FormControl>
+              
+              
+
             )}
             
             {actionDialog.type === 'return_dilated' && (

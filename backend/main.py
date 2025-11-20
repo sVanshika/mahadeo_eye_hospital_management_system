@@ -13,6 +13,7 @@ from pathlib import Path
 from database_sqlite import engine, Base
 from routers import auth, patients, opd, admin, display, printing, opd_management
 from websocket_manager import sio
+from migrate_dilation_flag import add_dilation_flag_column
 
 load_dotenv()
 
@@ -21,7 +22,11 @@ Base.metadata.create_all(bind=engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup - Run migrations
+    try:
+        add_dilation_flag_column()
+    except Exception as e:
+        print(f"Migration warning: {e}")
     yield
     # Shutdown
 
