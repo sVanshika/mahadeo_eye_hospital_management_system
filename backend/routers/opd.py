@@ -75,17 +75,26 @@ async def get_opd_queue(
         # Check what statuses we're looking for
         print(f"Looking for statuses: {[PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]}")
         
+        # FIXED LOGIC:
+        # Show patients who:
+        # 1. Are in this OPD's queue (Queue.opd_type matches)
+        # 2. Have active status (PENDING, IN_OPD, DILATED, REFERRED)
+        # 3. Are NOT referred away from this OPD to another OPD
+        #    - If Patient.referred_from == this OPD AND referred_to == another OPD, EXCLUDE
+        #    - If Patient.referred_to == this OPD (referred TO here), INCLUDE
+        #    - If no referral fields set, INCLUDE
+        
         queue_entries = db.query(Queue).join(Patient).filter(
             Queue.opd_type == opd_type,
             Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED])
         ).filter(
-        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-        # Allow: fresh patients (no referral), patients referred TO this OPD, patients referred FROM this OPD back to this OPD
-        ~(
-            (Patient.referred_from == opd_type) & 
-            (Patient.referred_to != opd_type) & 
-            (Patient.referred_to.isnot(None))
-        )
+            # Exclude ONLY patients who were referred OUT from this OPD to a different OPD
+            # This means: referred_from = this OPD AND referred_to = another OPD
+            ~(
+                (Patient.referred_from == opd_type) & 
+                (Patient.referred_to != opd_type) & 
+                (Patient.referred_to.isnot(None))
+            )
         ).order_by(Queue.position).all()
         
         print(f"Found {len(queue_entries)} queue entries after filtering")
@@ -97,30 +106,42 @@ async def get_opd_queue(
         traceback.print_exc()
         return []
     
-    # Sort queue: IN_OPD first, then other patients by position, then referred by waiting time
-    # Separate into 3 categories
-    # 1. IN_OPD: Anyone currently being served (Queue.status = IN_OPD) - ALWAYS show at top
+    # Sort queue: IN_OPD first, then regular patients by position, then referred patients by waiting time
+    # Separate into 3 categories:
+    
+    # 1. IN_OPD: Currently being served (Queue.status = IN_OPD) - ALWAYS show at top
     in_opd_patients = [e for e in queue_entries if e.status == PatientStatus.IN_OPD]
     
-    # 2. REFERRED: Patients waiting to be called who were referred (Patient.current_status = REFERRED and NOT in OPD)
-    referred_patients = [e for e in queue_entries if e.patient.current_status == PatientStatus.REFERRED and e.status != PatientStatus.IN_OPD]
+    # 2. REGULAR: Regular waiting patients (PENDING, DILATED) - sorted by position
+    # Exclude patients with current_status = REFERRED (those are handled separately)
+    regular_patients = [e for e in queue_entries 
+                       if e.status in [PatientStatus.PENDING, PatientStatus.DILATED] 
+                       and e.patient.current_status != PatientStatus.REFERRED]
     
-    # 3. OTHER: Regular waiting patients (PENDING, DILATED, etc.)
-    other_patients = [e for e in queue_entries if e.status != PatientStatus.IN_OPD and e.patient.current_status != PatientStatus.REFERRED]
+    # 3. REFERRED: Patients referred TO this OPD waiting to be called
+    # These have Queue.status = REFERRED and Patient.referred_to = this OPD
+    referred_patients = [e for e in queue_entries 
+                        if e.status == PatientStatus.REFERRED 
+                        and e.patient.referred_to == opd_type]
     
     # Sort referred patients by registration time (oldest first = longest waiting)
     referred_patients.sort(key=lambda x: x.patient.registration_time)
     
-    # Combine: IN_OPD first (current patient), then other patients, then referred patients
-    queue_entries = in_opd_patients + other_patients + referred_patients
+    # Combine: IN_OPD first (current patient), then regular patients, then referred patients
+    queue_entries = in_opd_patients + regular_patients + referred_patients
     
-    print(f"Queue order: {len(in_opd_patients)} IN_OPD + {len(other_patients)} other + {len(referred_patients)} referred")
+    print(f"Queue order: {len(in_opd_patients)} IN_OPD + {len(regular_patients)} regular + {len(referred_patients)} referred")
+    print(f"IN_OPD patients: {[e.patient.token_number for e in in_opd_patients]}")
+    print(f"Regular patients: {[e.patient.token_number for e in regular_patients]}")
+    print(f"Referred patients: {[e.patient.token_number for e in referred_patients]}")
 
     print("**** Building queue response ****")
     queue_data = []
+    # Renumber positions to be sequential (1, 2, 3, ...) for display
+    display_position = 1
     for entry in queue_entries:
         try:
-            print(f"Processing: {entry.patient.name}, Status: {entry.status}")
+            print(f"Processing: {entry.patient.name}, Status: {entry.status}, DB Position: {entry.position}, Display Position: {display_position}")
             
             # Convert status for referred patients
             display_status = entry.status
@@ -132,7 +153,7 @@ async def get_opd_queue(
                 patient_id=entry.patient_id,
                 token_number=entry.patient.token_number,
                 patient_name=entry.patient.name,
-                position=entry.position,
+                position=display_position,  # Use sequential display position
                 status=display_status,
                 registration_time=entry.patient.registration_time,
                 is_dilated=entry.patient.is_dilated if entry.patient.is_dilated is not None else False,
@@ -143,6 +164,7 @@ async def get_opd_queue(
                 referred_from=entry.patient.referred_from
             )
             queue_data.append(queue_item)
+            display_position += 1  # Increment for next patient
             print(f"  ✓ Added to queue response")
         except Exception as e:
             print(f"  ✗ ERROR creating response for {entry.patient.name}: {e}")
@@ -575,23 +597,38 @@ async def get_opd_stats(
     
     today = get_ist_now().date()
     
-    # Get queue statistics
-    total_patients = db.query(Queue).filter(Queue.opd_type == opd_type).count()
-    pending_patients = db.query(Queue).filter(
+    # Get queue statistics - EXCLUDE patients referred OUT from this OPD
+    # Apply same filter as in get_opd_queue
+    base_query = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
+        # Exclude patients referred OUT from this OPD to another OPD
+        ~(
+            (Patient.referred_from == opd_type) & 
+            (Patient.referred_to != opd_type) & 
+            (Patient.referred_to.isnot(None))
+        )
+    )
+    
+    total_patients = base_query.filter(
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED])
+    ).count()
+    
+    pending_patients = base_query.filter(
         Queue.status == PatientStatus.PENDING
     ).count()
-    in_opd_patients = db.query(Queue).filter(
-        Queue.opd_type == opd_type,
+    
+    in_opd_patients = base_query.filter(
         Queue.status == PatientStatus.IN_OPD
     ).count()
-    dilated_patients = db.query(Queue).filter(
-        Queue.opd_type == opd_type,
+    
+    dilated_patients = base_query.filter(
         Queue.status == PatientStatus.DILATED
     ).count()
-    referred_patients = db.query(Queue).filter(
-        Queue.opd_type == opd_type,
-        Queue.status == PatientStatus.REFERRED
+    
+    # Referred patients TO this OPD (waiting to be called)
+    referred_patients = base_query.filter(
+        Queue.status == PatientStatus.REFERRED,
+        Patient.referred_to == opd_type
     ).count()
     
     # Get completed patients today

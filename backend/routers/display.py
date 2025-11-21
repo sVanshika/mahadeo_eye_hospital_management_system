@@ -82,56 +82,90 @@ async def get_opd_display_data(
             is_dilated=current_patient_query.patient.is_dilated
         )
     
-    # Get next patients (PENDING status)
-    # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+    # Get next patients (PENDING, DILATED, REFERRED status)
+    # Include: Regular patients and referred patients TO this OPD
+    # Exclude: Patients referred FROM this OPD to another OPD
     next_patients_query = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status == PatientStatus.PENDING,
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.DILATED, PatientStatus.REFERRED]),
         Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).filter(
-        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+        # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
         ~(
             (Patient.referred_from == opd_type) & 
             (Patient.referred_to != opd_type) & 
             (Patient.referred_to.isnot(None))
         )
-    ).order_by(Queue.position).limit(5).all()
+    ).order_by(Queue.position).all()
+    
+    print(f"✓ Found {len(next_patients_query)} patients before filtering")
+    
+    # Additional filter: Only show REFERRED patients if they're referred TO this OPD
+    filtered_patients = []
+    for entry in next_patients_query:
+        if entry.status == PatientStatus.REFERRED:
+            # Only include if referred TO this OPD
+            if entry.patient.referred_to == opd_type:
+                filtered_patients.append(entry)
+                print(f"  ✓ REFERRED patient: {entry.patient.token_number} from {entry.patient.referred_from}")
+        else:
+            filtered_patients.append(entry)
+    
+    next_patients_query = filtered_patients[:5]  # Limit to 5 after filtering
+    print(f"✓ Displaying {len(next_patients_query)} patients on screen")
     
     next_patients = []
+    display_position = 2  # Start from 2 (position 1 is current patient)
     for entry in next_patients_query:
         waiting_time = None
         if entry.patient.registration_time:
             waiting_time = int((get_ist_now() - entry.patient.registration_time).total_seconds() / 60)
         
         next_patients.append(DisplayQueueItem(
-            position=entry.position,
+            position=display_position,  # Sequential position for display
             token_number=entry.patient.token_number,
             patient_name=entry.patient.name,
             status=entry.status,
             waiting_time_minutes=waiting_time,
             is_dilated=entry.patient.is_dilated
         ))
+        display_position += 1  # Increment for next patient
     
-    # Get total patients in queue
+    # Get total patients in queue (include REFERRED patients TO this OPD)
     # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-    total_patients = db.query(Queue).join(Patient).filter(
+    all_patients_query = db.query(Queue).join(Patient).filter(
         Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED]),
+        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]),
         Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
     ).filter(
-        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
+        # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
         ~(
             (Patient.referred_from == opd_type) & 
             (Patient.referred_to != opd_type) & 
             (Patient.referred_to.isnot(None))
         )
-    ).count()
+    ).all()
+    
+    # Count only patients who are actually in this OPD
+    # (Regular patients + REFERRED TO this OPD)
+    total_patients = 0
+    for entry in all_patients_query:
+        if entry.status == PatientStatus.REFERRED:
+            # Only count if referred TO this OPD
+            if entry.patient.referred_to == opd_type:
+                total_patients += 1
+        else:
+            total_patients += 1
     
     # Calculate estimated wait time (simplified)
     estimated_wait_time = None
     if next_patients:
         # Assume 10 minutes per patient on average
         estimated_wait_time = len(next_patients) * 10
+    
+    print(f"✓ Total patients in {opd_type}: {total_patients}")
+    print(f"✓ Next patients count: {len(next_patients)}")
+    print(f"{'='*60}\n")
     
     return DisplayData(
         opd_type=opd_type,
