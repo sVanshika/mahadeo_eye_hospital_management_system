@@ -235,19 +235,24 @@ async def call_next_patient(
     next_patient.patient.current_room = f"opd_{opd_type}"
     next_patient.updated_at = get_ist_now()
     
-    # IMPORTANT: If patient was referred TO this OPD, accept them fully
-    # Update their status to IN_OPD and clear referral fields (they're now managed here)
-    if (next_patient.patient.current_status == PatientStatus.REFERRED and 
-        next_patient.patient.referred_to == opd_type):
-        # Patient is being accepted in destination OPD
+    # # IMPORTANT: If patient was referred TO this OPD, accept them fully
+    # # Update their status to IN_OPD and clear referral fields (they're now managed here)
+    # if (next_patient.patient.current_status == PatientStatus.REFERRED and 
+    #     next_patient.patient.referred_to == opd_type):
+    #     # Patient is being accepted in destination OPD
+    #     next_patient.patient.current_status = PatientStatus.IN_OPD
+    #     next_patient.patient.allocated_opd = opd_type  # Update primary OPD
+    #     # # Clear referral fields (referral is complete)
+    #     # next_patient.patient.referred_from = None
+    #     # next_patient.patient.referred_to = None
+    # elif next_patient.patient.current_status != PatientStatus.REFERRED:
+    #     # Regular patient (not referred)
+    #     next_patient.patient.current_status = PatientStatus.IN_OPD
+
+    # Only update patient's current_status to IN_OPD if they're not a referred patient
+    if next_patient.patient.current_status != PatientStatus.REFERRED:
         next_patient.patient.current_status = PatientStatus.IN_OPD
-        next_patient.patient.allocated_opd = opd_type  # Update primary OPD
-        # Clear referral fields (referral is complete)
-        next_patient.patient.referred_from = None
-        next_patient.patient.referred_to = None
-    elif next_patient.patient.current_status != PatientStatus.REFERRED:
-        # Regular patient (not referred)
-        next_patient.patient.current_status = PatientStatus.IN_OPD
+    
     
     # Log patient flow
     flow_entry = PatientFlow(
