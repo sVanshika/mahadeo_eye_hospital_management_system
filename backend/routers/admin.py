@@ -4,7 +4,7 @@ from sqlalchemy import func, desc
 from typing import List, Optional
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, User, Room, Patient, Queue, PatientStatus, OPD, PatientFlow, UserRole, get_ist_now, UserOPDAccess, get_user_opd_access
+from database import get_db, User, Room, Patient, Queue, PatientStatus, OPD, PatientFlow, UserRole, get_ist_now, UserOPDAccess, get_user_opd_access
 from auth import get_current_active_user, User, require_role, UserCreate, UserResponse
 
 router = APIRouter()

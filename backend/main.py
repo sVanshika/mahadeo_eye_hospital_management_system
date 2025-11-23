@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import os
 from pathlib import Path
 
-from database_sqlite import engine, Base
+from database import engine, Base
 from routers import auth, patients, opd, admin, display, printing, opd_management
 from websocket_manager import sio
 from migrate_dilation_flag import add_dilation_flag_column
@@ -24,6 +24,7 @@ Base.metadata.create_all(bind=engine)
 async def lifespan(app: FastAPI):
     # Startup - Run migrations
     try:
+        # Add dilation_flag column if it doesn't exist (works for both SQLite and PostgreSQL)
         add_dilation_flag_column()
     except Exception as e:
         print(f"Migration warning: {e}")
@@ -34,7 +35,8 @@ app = FastAPI(
     title="Eye Hospital Patient Management System",
     description="Real-time queue and patient flow management system",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False  # Disable automatic trailing slash redirects
 )
 
 # CORS middleware - Allow all origins for local development

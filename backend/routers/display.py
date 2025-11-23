@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, get_ist_now
+from database import get_db, Patient, Queue, PatientStatus, OPD, get_ist_now
 from auth import get_current_active_user, User
 import pytz
 ist = pytz.timezone('Asia/Kolkata')

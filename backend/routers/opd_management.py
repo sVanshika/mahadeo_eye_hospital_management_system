@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
-from database_sqlite import get_db, OPD, get_ist_now
+from database import get_db, OPD, get_ist_now
 from auth import get_current_active_user, User, require_role, UserRole
 import pytz
 ist = pytz.timezone('Asia/Kolkata')

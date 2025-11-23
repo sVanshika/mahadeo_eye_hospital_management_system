@@ -6,7 +6,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from database_sqlite import get_db, User, UserRole, get_ist_now
+from database import get_db, User, UserRole, get_ist_now
 import os
 from dotenv import load_dotenv
 
@@ -156,7 +156,7 @@ def check_opd_access(user: User, opd_code: str, db: Session):
     
     # For nursing staff, check OPD access
     if user.role == UserRole.NURSING:
-        from database_sqlite import user_has_opd_access
+        from database import user_has_opd_access
         if user_has_opd_access(db, user.id, opd_code):
             return True
         else:

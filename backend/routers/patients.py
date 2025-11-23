@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow, get_ist_now
+from database import get_db, Patient, Queue, PatientStatus, OPD, PatientFlow, get_ist_now
 from auth import get_current_active_user, User, require_role, UserRole
 from websocket_manager import broadcast_queue_update, broadcast_patient_status_update, broadcast_display_update
 import asyncio
@@ -535,7 +535,7 @@ async def list_referred_patients(
     return result
 '''
 
-@router.get("/", response_model=List[PatientResponse])
+@router.get("", response_model=List[PatientResponse])
 async def get_patients(
     skip: int = 0,
     limit: int = 1000,  # Increased limit for All Patients table

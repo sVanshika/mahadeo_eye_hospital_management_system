@@ -1,7 +1,7 @@
 import socketio
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from database_sqlite import get_db, Queue, Patient, PatientStatus
+from database import get_db, Queue, Patient, PatientStatus
 from typing import List, Dict
 import json
 

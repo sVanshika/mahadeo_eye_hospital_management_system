@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 from typing import List
 from pydantic import BaseModel
-from database_sqlite import get_db, User, UserRole, get_user_opd_access
+from database import get_db, User, UserRole, get_user_opd_access
 from auth import (
     authenticate_user, create_access_token, get_password_hash,
     get_current_active_user, UserLogin, UserCreate, UserResponse, Token, ACCESS_TOKEN_EXPIRE_MINUTES
@@ -38,7 +38,7 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
         allowed_opds = get_user_opd_access(db, user.id)
     elif user.role == UserRole.ADMIN:
         # Admin has access to all OPDs
-        from database_sqlite import OPD
+        from database import OPD
         all_opds = db.query(OPD).filter(OPD.is_active == True).all()
         allowed_opds = [opd.opd_code for opd in all_opds]
     # Registration staff doesn't need OPD access (allowed_opds remains empty)
