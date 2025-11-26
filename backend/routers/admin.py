@@ -425,6 +425,37 @@ async def get_patient_flows(
     
     return flow_data
 
+@router.delete("/patients/{patient_id}")
+async def delete_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    """
+    Delete a patient and all their associated records (flows, queues, etc.)
+    Admin only operation.
+    """
+    # Find the patient
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Delete associated records
+    # Delete patient flows
+    db.query(PatientFlow).filter(PatientFlow.patient_id == patient_id).delete()
+    
+    # Delete queue entries
+    db.query(Queue).filter(Queue.patient_id == patient_id).delete()
+    
+    # Delete the patient
+    db.delete(patient)
+    db.commit()
+    
+    return {
+        "message": f"Patient {patient.name} (Token: {patient.token_number}) deleted successfully",
+        "patient_id": patient_id
+    }
+
 @router.get("/reports/daily")
 async def get_daily_report(
     report_date: Optional[date] = None,

@@ -29,14 +29,20 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [user]);
 
   const fetchStats = async () => {
-    try {
-      const response = await apiClient.get('/admin/dashboard');
-      setStats(response.data);
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
+    // Only fetch admin dashboard stats if user is an admin
+    if (user && user.role === 'admin') {
+      try {
+        const response = await apiClient.get('/admin/dashboard');
+        setStats(response.data);
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+        setStats(null);
+      }
+    } else {
+      setStats(null);
     }
   };
 
