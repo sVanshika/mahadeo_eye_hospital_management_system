@@ -4,16 +4,14 @@ services:
     name: eye-hospital-backend
     env: python
     plan: starter  # Free tier
-    region: oregon  # Match your existing database region (check your PostgreSQL service)
+    region: oregon  # Match your existing database region
     buildCommand: pip install -r backend/requirements.txt
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.4
-      # DATABASE_URL will be set manually after deployment to link to your existing database
-      # Or use "Add from" in Render dashboard to link your existing PostgreSQL service
       - key: DATABASE_URL
-        sync: false  # Manual: Set to your database URL in Render dashboard
+        value: postgresql://eye_hospital_db_user:xKTLPvjCPXVHiHonSWftvCGNnqPccPWd@dpg-d4snm1ali9vc73ek0jv0-a/eye_hospital_db
       - key: SECRET_KEY
         generateValue: true
       - key: ALGORITHM
