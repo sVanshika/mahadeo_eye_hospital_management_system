@@ -23,7 +23,16 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     // Connect to Socket.IO server
-    const SOCKET_URL = 'http://localhost:8000';
+    // Use environment variable or auto-detect based on hostname
+    const runtimeUrl = typeof window !== 'undefined' ? window.__BACKEND_URL__ : undefined;
+    const envUrl = process.env.REACT_APP_API_URL || process.env.APP_BACKEND_URL || process.env.VITE_BACKEND_URL;
+    const defaultUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      ? 'https://eye-hospital-backend.onrender.com'  // Render backend URL (update with your actual service name)
+      : 'http://localhost:8000';
+    
+    const SOCKET_URL = (runtimeUrl || envUrl || defaultUrl).replace(/\/$/, '');
+    console.log('Socket.IO connecting to:', SOCKET_URL);
+    
     const socketInstance = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true,

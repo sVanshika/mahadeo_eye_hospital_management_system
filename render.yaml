@@ -1,11 +1,32 @@
 services:
+  # PostgreSQL Database
+  - type: pspg
+    name: eye-hospital-db
+    plan: starter  # Free tier, upgrade if needed
+    databaseName: eye_hospital
+    user: eye_hospital_user
+
+  # Backend API Service
   - type: web
-    name: eye-hospital-fullstack
+    name: eye-hospital-backend
     env: python
-    buildCommand: |
-      cd frontend && npm install && npm run build && cd ..
-      cd backend && pip install -r requirements.txt
-    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port 10000
+    plan: starter  # Free tier, upgrade if needed
+    region: singapore  # Change to your preferred region
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.4
+      - key: DATABASE_URL
+        sync: false  # Set this manually in Render dashboard with your actual database URL
+        # Value: postgresql://eye_hospital_db_user:xKTLPvjCPXVHiHonSWftvCGNnqPccPWd@dpg-d4snm1ali9vc73ek0jv0-a/eye_hospital_db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: HOST
+        value: 0.0.0.0
+      - key: CORS_ORIGINS
+        value: https://mahadeo-eye-hospital-management-sys.vercel.app,http://localhost:3000,http://localhost:3001

@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "REACT_APP_API_URL": "https://eye-hospital-backend.onrender.com"
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://eye-hospital-backend.onrender.com/api/$1"
+    },
+    {
+      "source": "/socket.io/(.*)",
+      "destination": "https://eye-hospital-backend.onrender.com/socket.io/$1"
+    }
+  ]
+}
+

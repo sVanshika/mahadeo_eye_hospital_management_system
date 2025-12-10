@@ -39,11 +39,14 @@ app = FastAPI(
     redirect_slashes=False  # Disable automatic trailing slash redirects
 )
 
-# CORS middleware - Allow all origins for local development
+# CORS middleware - Configure allowed origins from environment variable
+cors_origins_str = os.getenv("CORS_ORIGINS", "*")
+cors_origins = cors_origins_str.split(",") if cors_origins_str != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=False,  # Must be False when using wildcard
+    allow_origins=cors_origins,  # Use environment variable or allow all for development
+    allow_credentials=False if "*" in cors_origins else True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],

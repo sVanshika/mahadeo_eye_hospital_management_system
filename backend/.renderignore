@@ -1,0 +1,8 @@
+# Render ignore file for backend
+__pycache__/
+*.pyc
+*.db
+*.sqlite
+.env
+*.md
+
