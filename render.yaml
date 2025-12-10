@@ -1,25 +1,19 @@
 services:
-  # PostgreSQL Database
-  - type: pspg
-    name: eye-hospital-db
-    plan: starter  # Free tier, upgrade if needed
-    databaseName: eye_hospital
-    user: eye_hospital_user
-
   # Backend API Service
   - type: web
     name: eye-hospital-backend
     env: python
-    plan: starter  # Free tier, upgrade if needed
-    region: singapore  # Change to your preferred region
+    plan: starter  # Free tier
+    region: oregon  # Match your database region
     buildCommand: pip install -r backend/requirements.txt
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.4
       - key: DATABASE_URL
-        sync: false  # Set this manually in Render dashboard with your actual database URL
-        # Value: postgresql://eye_hospital_db_user:xKTLPvjCPXVHiHonSWftvCGNnqPccPWd@dpg-d4snm1ali9vc73ek0jv0-a/eye_hospital_db
+        fromDatabase:
+          name: eye-hospital-db
+          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: ALGORITHM
