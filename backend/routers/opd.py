@@ -127,10 +127,10 @@ def get_queue_data(opd_type, db, current_user):
 
     #print("**** Building queue response ****")
     queue_data = []
-    for entry in queue_entries:
+    for index in range(len(queue_entries)):
         try:
             #print(f"Processing: {entry.patient.name}, Status: {entry.status}")
-            
+            entry = queue_entries[index]
             # Convert status for referred patients
             display_status = entry.status
             if entry.status == PatientStatus.REFERRED:
@@ -141,7 +141,7 @@ def get_queue_data(opd_type, db, current_user):
                 patient_id=entry.patient_id,
                 token_number=entry.patient.token_number,
                 patient_name=entry.patient.name,
-                position=entry.position,
+                position=index+1,
                 status=display_status,
                 registration_time=entry.patient.registration_time,
                 is_dilated=entry.patient.is_dilated if entry.patient.is_dilated is not None else False,
@@ -240,21 +240,7 @@ async def call_next_patient(
     next_patient.patient.current_room = f"opd_{opd_type}"
     next_patient.updated_at = get_ist_now()
     
-    # # IMPORTANT: If patient was referred TO this OPD, accept them fully
-    # # Update their status to IN_OPD and clear referral fields (they're now managed here)
-    # if (next_patient.patient.current_status == PatientStatus.REFERRED and 
-    #     next_patient.patient.referred_to == opd_type):
-    #     # Patient is being accepted in destination OPD
-    #     next_patient.patient.current_status = PatientStatus.IN_OPD
-    #     next_patient.patient.allocated_opd = opd_type  # Update primary OPD
-    #     # # Clear referral fields (referral is complete)
-    #     # next_patient.patient.referred_from = None
-    #     # next_patient.patient.referred_to = None
-    # elif next_patient.patient.current_status != PatientStatus.REFERRED:
-    #     # Regular patient (not referred)
-    #     next_patient.patient.current_status = PatientStatus.IN_OPD
-
-    # Only update patient's current_status to IN_OPD if they're not a referred patient
+    
     if next_patient.patient.current_status != PatientStatus.REFERRED:
         next_patient.patient.current_status = PatientStatus.IN_OPD
     
@@ -359,15 +345,6 @@ async def return_dilated_patient(
     if not patient.is_dilated:
         raise HTTPException(status_code=400, detail="Patient is not dilated")
     
-    # Check if dilation time has passed (30-40 minutes)
-    # if patient.dilation_time:
-    #     time_since_dilation = get_ist_now() - patient.dilation_time
-    #     if time_since_dilation < timedelta(minutes=30):
-    #         remaining_time = 30 - int(time_since_dilation.total_seconds() / 60)
-    #         raise HTTPException(
-    #             status_code=400, 
-    #             detail=f"Dilation time not complete. Please wait {remaining_time} more minutes"
-    #         )
     
     # Update patient status back to IN_OPD
     patient.current_status = PatientStatus.PENDING
