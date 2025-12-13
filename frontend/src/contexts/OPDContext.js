@@ -24,9 +24,9 @@ export const OPDProvider = ({ children }) => {
   const fetchOPDs = async () => {
     try {
       setLoading(true);
-      console.log('Fetching OPDs from backend...');
+      //console.log('Fetching OPDs from backend...');
       const response = await apiClient.get('/opd-management/public');
-      console.log('OPDs fetched:', response.data);
+      //console.log('OPDs fetched:', response.data);
       setOpds(response.data);
       setError(null);
     } catch (err) {

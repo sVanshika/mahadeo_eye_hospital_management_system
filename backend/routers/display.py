@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 from database_sqlite import get_db, Patient, Queue, PatientStatus, OPD, get_ist_now
 from auth import get_current_active_user, User
+from .opd import get_opd_queue, get_queue_data
 import pytz
 ist = pytz.timezone('Asia/Kolkata')
 router = APIRouter()
@@ -24,7 +25,7 @@ class DisplayQueueItem(BaseModel):
 
 class DisplayData(BaseModel):
     opd_type: str
-    current_patient: Optional[DisplayQueueItem]
+    current_patient: Optional[DisplayQueueItem] or None
     next_patients: List[DisplayQueueItem]
     total_patients: int
     estimated_wait_time: Optional[int]
@@ -40,114 +41,57 @@ async def get_opd_display_data(
 ):
     # Normalize OPD code to lowercase for database lookup
     opd_type = opd_type.lower()
+    unformatted_opd_data = get_queue_data(opd_type, db, None)
+    formatted_opd_data = format_opd_data(opd_type, unformatted_opd_data)
     
-    print(f"\n{'='*60}")
-    print(f"=== GET DISPLAY DATA FOR OPD: {opd_type} ===")
-    print(f"{'='*60}")
-    
-    # Get current patient (IN_OPD status)
-    # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-    current_patient_query = db.query(Queue).join(Patient).filter(
-        Queue.opd_type == opd_type,
-        Queue.status == PatientStatus.IN_OPD,
-        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
-    ).filter(
-        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-        ~(
-            (Patient.referred_from == opd_type) & 
-            (Patient.referred_to != opd_type) & 
-            (Patient.referred_to.isnot(None))
+    return formatted_opd_data
+
+def format_opd_data(opd_type, opd_data):
+    if len(opd_data) < 1:
+        return DisplayData(
+            opd_type=opd_type,
+            current_patient = None, 
+            next_patients = [],
+            total_patients = 0,
+            estimated_wait_time = 0
         )
-    ).order_by(Queue.position).first()
+    curr = opd_data[0]
+    if curr.registration_time:
+        waiting_time = int((get_ist_now() - curr.registration_time).total_seconds() / 60)
     
-    if current_patient_query:
-        print(f"✓ Found current patient: {current_patient_query.patient.token_number} - {current_patient_query.patient.name}")
-        print(f"  - Referred from: {current_patient_query.patient.referred_from}")
-        print(f"  - Referred to: {current_patient_query.patient.referred_to}")
-    else:
-        print(f"✗ No current patient (IN_OPD) found for {opd_type}")
-    
-    current_patient = None
-    if current_patient_query:
-        waiting_time = None
-        if current_patient_query.patient.registration_time:
-            waiting_time = int((get_ist_now() - current_patient_query.patient.registration_time).total_seconds() / 60)
-        
-        current_patient = DisplayQueueItem(
-            position=current_patient_query.position,
-            token_number=current_patient_query.patient.token_number,
-            patient_name=current_patient_query.patient.name,
-            status=current_patient_query.status,
-            waiting_time_minutes=waiting_time,
-            is_dilated=current_patient_query.patient.is_dilated
-        )
-    
-    # Get next patients (PENDING or REFERRED status)
-    # Include referred patients who are waiting in this OPD
-    # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-    next_patients_query = db.query(Queue).join(Patient).filter(
-        Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.REFERRED]),  # Include REFERRED patients
-        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
-    ).filter(
-        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-        ~(
-            (Patient.referred_from == opd_type) & 
-            (Patient.referred_to != opd_type) & 
-            (Patient.referred_to.isnot(None))
-        )
-    ).order_by(Queue.position).limit(5).all()
-    
-    print(f"✓ Found {len(next_patients_query)} next patients in queue")
-    for idx, entry in enumerate(next_patients_query, 1):
-        print(f"  {idx}. {entry.patient.token_number} - {entry.patient.name} (Status: {entry.status}, Referred from: {entry.patient.referred_from})")
-    
+    current_patient = DisplayQueueItem(position=curr.position,
+                                       token_number=curr.token_number,
+                                       patient_name=curr.patient_name,
+                                       status=curr.status,
+                                       waiting_time_minutes=waiting_time,
+                                       is_dilated=curr.is_dilated)
+
     next_patients = []
-    for entry in next_patients_query:
+    for entry in opd_data[1:]:
         waiting_time = None
-        if entry.patient.registration_time:
-            waiting_time = int((get_ist_now() - entry.patient.registration_time).total_seconds() / 60)
+        if entry.registration_time:
+            waiting_time = int((get_ist_now() - entry.registration_time).total_seconds() / 60)
         
         next_patients.append(DisplayQueueItem(
             position=entry.position,
-            token_number=entry.patient.token_number,
-            patient_name=entry.patient.name,
+            token_number=entry.token_number,
+            patient_name=entry.patient_name,
             status=entry.status,
             waiting_time_minutes=waiting_time,
-            is_dilated=entry.patient.is_dilated
+            is_dilated=entry.is_dilated
         ))
-    
-    # Get total patients in queue (include REFERRED patients)
-    # Exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-    total_patients = db.query(Queue).join(Patient).filter(
-        Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]),
-        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
-    ).filter(
-        # Only exclude patients who were referred FROM this OPD to a DIFFERENT OPD
-        ~(
-            (Patient.referred_from == opd_type) & 
-            (Patient.referred_to != opd_type) & 
-            (Patient.referred_to.isnot(None))
-        )
-    ).count()
-    
-    print(f"✓ Total patients in {opd_type}: {total_patients}")
-    print(f"{'='*60}\n")
-    
-    # Calculate estimated wait time (simplified)
-    estimated_wait_time = None
-    if next_patients:
-        # Assume 10 minutes per patient on average
-        estimated_wait_time = len(next_patients) * 10
-    
-    return DisplayData(
+
+    total_patients = 0
+    estimated_wait_time = 0
+    formatted_opd_data = DisplayData(
         opd_type=opd_type,
-        current_patient=current_patient,
-        next_patients=next_patients,
-        total_patients=total_patients,
-        estimated_wait_time=estimated_wait_time
+        current_patient = current_patient, 
+        next_patients = next_patients,
+        total_patients = total_patients,
+        estimated_wait_time = estimated_wait_time
     )
+
+    return formatted_opd_data
 
 @router.get("/all", response_model=AllOPDsDisplayData)
 async def get_all_opds_display_data(
@@ -160,9 +104,17 @@ async def get_all_opds_display_data(
         # Get all active OPDs from database
         active_opds = db.query(OPD).filter(OPD.is_active == True).all()
         for opd in active_opds:
-            opd_data = await get_opd_display_data(opd.opd_code, db)
-            opds_data.append(opd_data)
+            unformatted_opd_data = get_queue_data(opd.opd_code, db, None)
+            opd_data = format_opd_data(opd.opd_code, unformatted_opd_data)
+            #opd_data = await get_opd_display_data(opd.opd_code, db)
+            #print("********************")
+            #print(opd_data)
+            
+            if opd_data is not None:
+                opds_data.append(opd_data)
         
+
+
         return AllOPDsDisplayData(
             opds=opds_data,
             last_updated=get_ist_now()
@@ -230,28 +182,23 @@ async def get_waiting_list(
     limit: int = 10,
     db: Session = Depends(get_db)
 ):
-    """Get detailed waiting list for an OPD"""
-    waiting_patients = db.query(Queue).join(Patient).filter(
-        Queue.opd_type == opd_type,
-        Queue.status.in_([PatientStatus.PENDING, PatientStatus.DILATED]),
-        Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
-    ).order_by(Queue.position).limit(limit).all()
-    
+    unformatted_opd_data = get_queue_data(opd_type, db, None)
+    print("******************************** ->>>>> ", len(unformatted_opd_data))
     waiting_list = []
-    for entry in waiting_patients:
+    for entry in unformatted_opd_data:
         waiting_time = None
-        if entry.patient.registration_time:
-            waiting_time = int((get_ist_now() - entry.patient.registration_time).total_seconds() / 60)
+        if entry.registration_time:
+            waiting_time = int((get_ist_now() - entry.registration_time).total_seconds() / 60)
         
         waiting_list.append({
             "position": entry.position,
-            "token_number": entry.patient.token_number,
-            "patient_name": entry.patient.name,
-            "age": entry.patient.age,
+            "token_number": entry.token_number,
+            "patient_name": entry.patient_name,
+            "age": entry.age,
             "status": entry.status,
             "waiting_time_minutes": waiting_time,
-            "is_dilated": entry.patient.is_dilated,
-            "registration_time": entry.patient.registration_time.isoformat()
+            "is_dilated": entry.is_dilated,
+            "registration_time": entry.registration_time.isoformat()
         })
     
     return {

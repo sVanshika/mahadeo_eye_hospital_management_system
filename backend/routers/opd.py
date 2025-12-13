@@ -57,27 +57,32 @@ async def get_opd_queue(
     # Check OPD access
     check_opd_access(current_user, opd_type, db)
     
-    print(f"\n{'='*60}")
-    print(f"=== GET QUEUE FOR OPD: {opd_type} ===")
-    print(f"!!! CODE VERSION: 2024-11-14-v3 !!!")
-    print(f"{'='*60}")
+    queue_data = get_queue_data(opd_type, db, current_user)
+    
+    return queue_data
+
+def get_queue_data(opd_type, db, current_user):
+    #print(f"\n{'='*60}")
+    #print(f"=== GET QUEUE FOR OPD: {opd_type} ===")
+    #print(f"!!! CODE VERSION: 2024-11-14-v3 !!!")
+    #print(f"{'='*60}")
     
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
     if not opd:
         print(f"ERROR: OPD {opd_type} not found or inactive")
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
-    print(f"✓ OPD found: {opd.opd_code} - {opd.opd_name}")
+    #print(f"✓ OPD found: {opd.opd_code} - {opd.opd_name}")
     
     # First, let's see ALL queue entries for this OPD
     all_queue_entries = db.query(Queue).filter(Queue.opd_type == opd_type).all()
-    print(f"✓ Total queue entries for {opd_type}: {len(all_queue_entries)}")
-    for entry in all_queue_entries:
-        print(f"  - Patient ID: {entry.patient_id}, Status: {entry.status}, Position: {entry.position}")
+    #print(f"✓ Total queue entries for {opd_type}: {len(all_queue_entries)}")
+    # for entry in all_queue_entries:
+    #     print(f"  - Patient ID: {entry.patient_id}, Status: {entry.status}, Position: {entry.position}")
     
     try:
         # Check what statuses we're looking for
-        print(f"Looking for statuses: {[PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]}")
+        #print(f"Looking for statuses: {[PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]}")
         
         queue_entries = db.query(Queue).join(Patient).filter(
             Queue.opd_type == opd_type,
@@ -92,9 +97,9 @@ async def get_opd_queue(
         )
         ).order_by(Queue.position).all()
         
-        print(f"Found {len(queue_entries)} queue entries after filtering")
-        for entry in queue_entries:
-            print(f"  Matched: Patient {entry.patient_id} - {entry.patient.name}, Status: {entry.status}")
+        #print(f"Found {len(queue_entries)} queue entries after filtering")
+        # for entry in queue_entries:
+        #     print(f"  Matched: Patient {entry.patient_id} - {entry.patient.name}, Status: {entry.status}")
     except Exception as e:
         print(f"ERROR querying queue entries: {e}")
         import traceback
@@ -118,13 +123,13 @@ async def get_opd_queue(
     # Combine: IN_OPD first (current patient), then other patients, then referred patients
     queue_entries = in_opd_patients + other_patients + referred_patients
     
-    print(f"Queue order: {len(in_opd_patients)} IN_OPD + {len(other_patients)} other + {len(referred_patients)} referred")
+    #print(f"Queue order: {len(in_opd_patients)} IN_OPD + {len(other_patients)} other + {len(referred_patients)} referred")
 
-    print("**** Building queue response ****")
+    #print("**** Building queue response ****")
     queue_data = []
     for entry in queue_entries:
         try:
-            print(f"Processing: {entry.patient.name}, Status: {entry.status}")
+            #print(f"Processing: {entry.patient.name}, Status: {entry.status}")
             
             # Convert status for referred patients
             display_status = entry.status
@@ -148,13 +153,13 @@ async def get_opd_queue(
                 dilation_flag=entry.patient.dilation_flag
             )
             queue_data.append(queue_item)
-            print(f"  ✓ Added to queue response")
+            #print(f"  ✓ Added to queue response")
         except Exception as e:
             print(f"  ✗ ERROR creating response for {entry.patient.name}: {e}")
             import traceback
             traceback.print_exc()
     
-    print(f"Returning {len(queue_data)} patients in queue")
+    #print(f"Returning {len(queue_data)} patients in queue")
     return queue_data
 
 @router.post("/{opd_type}/call-next")

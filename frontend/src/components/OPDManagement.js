@@ -323,6 +323,18 @@ const OPDManagement = () => {
     return ` ${days}d ${hours}h ${minutes}m`;
   };
 
+  const formatRegistrationTime = (registrationTime) => {
+    let formatted = new Date(registrationTime)
+                    .toLocaleString('en-US', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true
+                    });
+    return formatted;
+  };
+
   const isDilatedForMoreThan30Mins = (dilationTime) => {
     const now = new Date();
     const dilatedAt = new Date(dilationTime);
@@ -542,9 +554,10 @@ const OPDManagement = () => {
                             <span>
                               {patient.position}. {patient.token_number.split("-")[1]} - {patient.patient_name}
                             </span>
-                            <span style={{ color: "#888", fontSize: "0.85rem" }}>
-                              | Waiting: {formatWaitingTime(patient.registration_time)} {(patient.dilation_flag && (
-                                <span>| Dilated Patient</span>
+                            <span style={{fontSize: "0.85rem" }}>
+                              | Registration: {formatRegistrationTime(patient.registration_time)} | Waiting: {formatWaitingTime(patient.registration_time)} 
+                              {(patient.dilation_flag && (
+                                <span>  | Dilated Patient</span>
                               ))} 
                             </span>
                             {/* {hasBeenDilated[patient.patient_id] && (
