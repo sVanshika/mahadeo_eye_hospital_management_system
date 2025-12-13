@@ -15,6 +15,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import hospitalLogo from "../hospital-logo.png";
+
 
 const Navbar = ({ onRefresh, showRefresh = true, pageTitle = "" }) => {
   const { user, logout } = useAuth();
@@ -39,7 +41,10 @@ const Navbar = ({ onRefresh, showRefresh = true, pageTitle = "" }) => {
       <Toolbar>
         {/* Logo and Title */}
         <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-          <Avatar sx={{ mr: 1.5, bgcolor: 'secondary.main', width: 40, height: 40 }}>
+          <Avatar src={hospitalLogo}
+                  alt="Hospital Logo"
+                  variant="rounded" 
+                  sx={{ mr: 1.5, width: 40, height: 40 }}>
             <LocalHospital />
           </Avatar>
           <Typography 
@@ -53,7 +58,7 @@ const Navbar = ({ onRefresh, showRefresh = true, pageTitle = "" }) => {
               textTransform: 'none'
             }}
           >
-            Mahadeo Singhi Eye Hospital
+            Mahadeo Singhi Eye and Multispeciality Hospital
           </Typography>
         </Box>
 
