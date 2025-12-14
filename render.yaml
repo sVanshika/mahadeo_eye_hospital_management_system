@@ -10,8 +10,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.4
+      # IMPORTANT: Replace with your actual database URL or set it in Render dashboard
+      # Option 1: Replace placeholder below with your database URL (less secure)
+      # Option 2: Leave placeholder and set DATABASE_URL in Render dashboard → Environment tab (recommended)
       - key: DATABASE_URL
-        value: postgresql://eye_hospital_db_user:xKTLPvjCPXVHiHonSWftvCGNnqPccPWd@dpg-d4snm1ali9vc73ek0jv0-a/eye_hospital_db
+        value: postgresql://USERNAME:PASSWORD@HOST:5432/DATABASE_NAME  # REPLACE THIS with your actual database URL
       - key: SECRET_KEY
         generateValue: true
       - key: ALGORITHM

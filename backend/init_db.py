@@ -14,8 +14,8 @@ from datetime import datetime
 def init_database():
     """Initialize database with tables and initial data"""
     
-    # Database URL
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost/eye_hospital")
+    # Database URL - should be set in .env file or environment variable
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:YOUR_PASSWORD@localhost:5432/Eye-Hospital")
     
     # Create engine
     engine = create_engine(DATABASE_URL)

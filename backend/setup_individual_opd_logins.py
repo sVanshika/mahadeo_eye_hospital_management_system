@@ -17,7 +17,7 @@ load_dotenv()
 def setup_individual_opd_logins():
     """Setup individual nurse users for each OPD"""
     
-    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/Eye-Hospital")
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:YOUR_PASSWORD@localhost:5432/Eye-Hospital")
     
     # Handle postgres:// to postgresql:// conversion
     if DATABASE_URL.startswith("postgres://"):
