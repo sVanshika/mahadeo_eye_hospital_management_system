@@ -437,7 +437,7 @@ const DisplayScreen = ({ opdCode = null }) => {
 
         <Grid container spacing={3}>
           {displayData?.opds?.map((opd, index) => (
-            <Grid item xs={12} md={index < 3 ? 4 : 6} key={opd.opd_type}>
+            <Grid item xs={12} md={3} key={opd.opd_type}>
               <Card sx={{ height: '42vh', display: 'flex', flexDirection: 'column' }}>
                 <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p:2 }}>
                   <Box display="flex" alignItems="center" mb={2}>

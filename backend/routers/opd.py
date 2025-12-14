@@ -75,7 +75,7 @@ def get_queue_data(opd_type, db, current_user):
     #print(f"✓ OPD found: {opd.opd_code} - {opd.opd_name}")
     
     # First, let's see ALL queue entries for this OPD
-    all_queue_entries = db.query(Queue).filter(Queue.opd_type == opd_type).all()
+    #all_queue_entries = db.query(Queue).filter(Queue.opd_type == opd_type).all()
     #print(f"✓ Total queue entries for {opd_type}: {len(all_queue_entries)}")
     # for entry in all_queue_entries:
     #     print(f"  - Patient ID: {entry.patient_id}, Status: {entry.status}, Position: {entry.position}")
@@ -95,11 +95,11 @@ def get_queue_data(opd_type, db, current_user):
             (Patient.referred_to != opd_type) & 
             (Patient.referred_to.isnot(None))
         )
-        ).order_by(Queue.position).all()
+        ).order_by(Patient.registration_time.asc()).all()
         
-        #print(f"Found {len(queue_entries)} queue entries after filtering")
-        # for entry in queue_entries:
-        #     print(f"  Matched: Patient {entry.patient_id} - {entry.patient.name}, Status: {entry.status}")
+        print(f"Found {len(queue_entries)} queue entries after filtering")
+        for entry in queue_entries:
+            print(f"  Matched: Patient {entry.patient_id} - {entry.patient.name}, Status: {entry.status}, Registration Time: {entry.patient.registration_time}")
     except Exception as e:
         print(f"ERROR querying queue entries: {e}")
         import traceback

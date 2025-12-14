@@ -326,7 +326,7 @@ async def refer_patient(
     current_user: User = Depends(require_role(UserRole.NURSING))
 ):
     print(f"\n=== REFER PATIENT {patient_id} ===")
-    print(f"Payload: {payload}")
+    #print(f"Payload: {payload}")
     
     to_opd = payload.to_opd.lower() if payload.to_opd else None
     remarks = payload.remarks

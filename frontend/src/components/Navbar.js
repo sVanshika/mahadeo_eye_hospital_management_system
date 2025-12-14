@@ -15,8 +15,10 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { Link } from "react-router-dom";
 // Hospital logo from public folder
 const hospitalLogo = "/hospital-logo.png";
+
 
 
 const Navbar = ({ onRefresh, showRefresh = true, pageTitle = "" }) => {
@@ -42,12 +44,14 @@ const Navbar = ({ onRefresh, showRefresh = true, pageTitle = "" }) => {
       <Toolbar>
         {/* Logo and Title */}
         <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+        <Link to="/dashboard" style={{ textDecoration: "none" }}>
           <Avatar src={hospitalLogo}
                   alt="Hospital Logo"
                   variant="rounded" 
                   sx={{ mr: 1.5, width: 40, height: 40 }}>
             <LocalHospital />
           </Avatar>
+          </Link>
           <Typography 
             variant="h6" 
             component="div" 

@@ -62,7 +62,13 @@ app.include_router(printing.router, prefix="/api/printing", tags=["printing"])
 app.include_router(opd_management.router, prefix="/api/opd-management", tags=["opd-management"])
 
 # Mount Socket.IO
-app.mount("/socket.io", socketio.ASGIApp(sio))
+socket_app = socketio.ASGIApp(
+    sio,
+    other_asgi_app=app
+)
+
+app.mount("/socket.io", socket_app)
+# app.mount("/socket.io", socketio.ASGIApp(sio))
 
 @app.get("/health")
 async def health_check():

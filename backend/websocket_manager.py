@@ -5,7 +5,7 @@ from database import get_db, Queue, Patient, PatientStatus
 from typing import List, Dict
 import json
 
-sio = socketio.AsyncServer(cors_allowed_origins="*")
+sio = socketio.AsyncServer(async_mode="asgi",cors_allowed_origins="*")
 
 @sio.event
 async def connect(sid, environ):
@@ -38,7 +38,7 @@ async def broadcast_queue_update(opd_type: str, db: Session):
         Queue.opd_type == opd_type,
         Queue.status.in_([PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]),
         Patient.current_status != PatientStatus.COMPLETED  # Exclude completed patients
-    ).order_by(Queue.position).all()
+    ).order_by(Patient.registration_time.asc()).all()
     
     queue_data = []
     for entry in queue_entries:

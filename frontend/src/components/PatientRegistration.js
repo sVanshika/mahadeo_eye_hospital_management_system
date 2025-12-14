@@ -238,10 +238,29 @@ const PatientRegistration = () => {
                 <List>
                   {patients.slice(0, 10).map((patient) => (
                     <ListItem key={patient.id} divider>
-                      <ListItemText
+                      {/* <ListItemText
                         primary={`${patient.token_number} - ${patient.name}`}
                         secondary={`${patient.age ? `Age: ${patient.age} | ` : ''}Status: ${getStatusLabel(patient.current_status)}`}
-                      />
+                      /> */}
+                      <ListItemText
+                          primary={
+                            <Box>
+                              {patient.registration_number && (
+                                <Chip 
+                                  label={`Reg: ${patient.registration_number}`} 
+                                  size="small" 
+                                  sx={{ mr: 1, bgcolor: '#e3f2fd' }}
+                                />
+                              )}
+                              <strong>{patient.token_number}</strong> - {patient.name}
+                            </Box>
+                          }
+                          secondary={
+                            <span>
+                              Registered: {new Date(patient.registration_time).toLocaleString()}
+                            </span>
+                          }
+                        />
                       <ListItemSecondaryAction>
                         <Box display="flex" alignItems="center" gap={1}>
                           <Chip
