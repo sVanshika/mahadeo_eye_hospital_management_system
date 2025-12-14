@@ -57,27 +57,32 @@ async def get_opd_queue(
     # Check OPD access
     check_opd_access(current_user, opd_type, db)
     
-    print(f"\n{'='*60}")
-    print(f"=== GET QUEUE FOR OPD: {opd_type} ===")
-    print(f"!!! CODE VERSION: 2024-11-14-v3 !!!")
-    print(f"{'='*60}")
+    queue_data = get_queue_data(opd_type, db, current_user)
+    
+    return queue_data
+
+def get_queue_data(opd_type, db, current_user):
+    #print(f"\n{'='*60}")
+    #print(f"=== GET QUEUE FOR OPD: {opd_type} ===")
+    #print(f"!!! CODE VERSION: 2024-11-14-v3 !!!")
+    #print(f"{'='*60}")
     
     # Validate OPD exists and is active
     opd = db.query(OPD).filter(OPD.opd_code == opd_type, OPD.is_active == True).first()
     if not opd:
         print(f"ERROR: OPD {opd_type} not found or inactive")
         raise HTTPException(status_code=404, detail="OPD not found or inactive")
-    print(f"✓ OPD found: {opd.opd_code} - {opd.opd_name}")
+    #print(f"✓ OPD found: {opd.opd_code} - {opd.opd_name}")
     
     # First, let's see ALL queue entries for this OPD
     all_queue_entries = db.query(Queue).filter(Queue.opd_type == opd_type).all()
-    print(f"✓ Total queue entries for {opd_type}: {len(all_queue_entries)}")
-    for entry in all_queue_entries:
-        print(f"  - Patient ID: {entry.patient_id}, Status: {entry.status}, Position: {entry.position}")
+    #print(f"✓ Total queue entries for {opd_type}: {len(all_queue_entries)}")
+    # for entry in all_queue_entries:
+    #     print(f"  - Patient ID: {entry.patient_id}, Status: {entry.status}, Position: {entry.position}")
     
     try:
         # Check what statuses we're looking for
-        print(f"Looking for statuses: {[PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]}")
+        #print(f"Looking for statuses: {[PatientStatus.PENDING, PatientStatus.IN_OPD, PatientStatus.DILATED, PatientStatus.REFERRED]}")
         
         queue_entries = db.query(Queue).join(Patient).filter(
             Queue.opd_type == opd_type,
@@ -92,9 +97,9 @@ async def get_opd_queue(
         )
         ).order_by(Queue.position).all()
         
-        print(f"Found {len(queue_entries)} queue entries after filtering")
-        for entry in queue_entries:
-            print(f"  Matched: Patient {entry.patient_id} - {entry.patient.name}, Status: {entry.status}")
+        #print(f"Found {len(queue_entries)} queue entries after filtering")
+        # for entry in queue_entries:
+        #     print(f"  Matched: Patient {entry.patient_id} - {entry.patient.name}, Status: {entry.status}")
     except Exception as e:
         print(f"ERROR querying queue entries: {e}")
         import traceback
@@ -118,14 +123,14 @@ async def get_opd_queue(
     # Combine: IN_OPD first (current patient), then other patients, then referred patients
     queue_entries = in_opd_patients + other_patients + referred_patients
     
-    print(f"Queue order: {len(in_opd_patients)} IN_OPD + {len(other_patients)} other + {len(referred_patients)} referred")
+    #print(f"Queue order: {len(in_opd_patients)} IN_OPD + {len(other_patients)} other + {len(referred_patients)} referred")
 
-    print("**** Building queue response ****")
+    #print("**** Building queue response ****")
     queue_data = []
-    for entry in queue_entries:
+    for index in range(len(queue_entries)):
         try:
-            print(f"Processing: {entry.patient.name}, Status: {entry.status}")
-            
+            #print(f"Processing: {entry.patient.name}, Status: {entry.status}")
+            entry = queue_entries[index]
             # Convert status for referred patients
             display_status = entry.status
             if entry.status == PatientStatus.REFERRED:
@@ -136,7 +141,7 @@ async def get_opd_queue(
                 patient_id=entry.patient_id,
                 token_number=entry.patient.token_number,
                 patient_name=entry.patient.name,
-                position=entry.position,
+                position=index+1,
                 status=display_status,
                 registration_time=entry.patient.registration_time,
                 is_dilated=entry.patient.is_dilated if entry.patient.is_dilated is not None else False,
@@ -148,13 +153,13 @@ async def get_opd_queue(
                 dilation_flag=entry.patient.dilation_flag
             )
             queue_data.append(queue_item)
-            print(f"  ✓ Added to queue response")
+            #print(f"  ✓ Added to queue response")
         except Exception as e:
             print(f"  ✗ ERROR creating response for {entry.patient.name}: {e}")
             import traceback
             traceback.print_exc()
     
-    print(f"Returning {len(queue_data)} patients in queue")
+    #print(f"Returning {len(queue_data)} patients in queue")
     return queue_data
 
 @router.post("/{opd_type}/call-next")
@@ -235,22 +240,9 @@ async def call_next_patient(
     next_patient.patient.current_room = f"opd_{opd_type}"
     next_patient.updated_at = get_ist_now()
     
-    #  IMPORTANT: If patient was referred TO this OPD, accept them fully
-    #  Update their status to IN_OPD and clear referral fields (they're now managed here)
-    # if (next_patient.patient.current_status == PatientStatus.REFERRED and 
-    #     next_patient.patient.referred_to == opd_type):
-    #     # Patient is being accepted in destination OPD
-    #     next_patient.patient.current_status = PatientStatus.IN_OPD
-    #     next_patient.patient.allocated_opd = opd_type  # Update primary OPD
-    #     # Clear referral fields (referral is complete)
-    #     next_patient.patient.referred_from = None
-    #     next_patient.patient.referred_to = None
-    # elif next_patient.patient.current_status != PatientStatus.REFERRED:
-    #     # Regular patient (not referred)
-    #     next_patient.patient.current_status = PatientStatus.IN_OPD
     if next_patient.patient.current_status != PatientStatus.REFERRED:
         next_patient.patient.current_status = PatientStatus.IN_OPD
-
+    
     # Log patient flow
     flow_entry = PatientFlow(
         patient_id=next_patient.patient_id,
@@ -351,15 +343,6 @@ async def return_dilated_patient(
     if not patient.is_dilated:
         raise HTTPException(status_code=400, detail="Patient is not dilated")
     
-    # Check if dilation time has passed (30-40 minutes)
-    # if patient.dilation_time:
-    #     time_since_dilation = get_ist_now() - patient.dilation_time
-    #     if time_since_dilation < timedelta(minutes=30):
-    #         remaining_time = 30 - int(time_since_dilation.total_seconds() / 60)
-    #         raise HTTPException(
-    #             status_code=400, 
-    #             detail=f"Dilation time not complete. Please wait {remaining_time} more minutes"
-    #         )
     
     # Update patient status back to IN_OPD
     patient.current_status = PatientStatus.PENDING

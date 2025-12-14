@@ -210,6 +210,18 @@ const DisplayScreen = ({ opdCode = null }) => {
     return `${waitingTime} min`;
   };
 
+  function chunkArray(array, n) {
+    if (!array || array.length === 0) return Array.from({ length: n }, () => []);
+    const size = Math.ceil(array.length / n);
+    const chunks = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    // ensure we always return exactly n arrays (some might be empty)
+    while (chunks.length < n) chunks.push([]);
+    return chunks;
+  }
+
   // Show loading while OPDs are loading OR display data is loading OR auth is loading
   if (loading || opdsLoading || authLoading) {
     return (
@@ -270,295 +282,138 @@ const DisplayScreen = ({ opdCode = null }) => {
   if (displayData?.isSingleOPD && displayData?.opds?.[0]) {
     const opd = displayData.opds[0];
     const opdName = getOPDByCode(opd.opd_type)?.opd_name || opd.opd_type;
+    const columns = opd.next_patients && opd.next_patients.length > 0
+    ? chunkArray(opd.next_patients, 3)
+    : [[], [], []];
+
   return (
-    <Box sx={{ flexGrow: 1, bgcolor: '#f5f5f5', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ flexGrow: 1, bgcolor: '#f5f5f5', minHeight: '100vh'}}>
       {/* Simple Header for LED Display */}
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          bgcolor: 'primary.main', 
-          color: 'white', 
-          py: { xs: 2, sm: 2.5, md: 3 }, 
-          px: { xs: 1, sm: 2 },
-          mb: { xs: 1, sm: 2 }, 
-          textAlign: 'center' 
-        }}
-      >
-        <Typography 
-          variant="h3" 
-          sx={{ 
-            fontWeight: 700, 
-            fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem', lg: '3rem' }, 
-            letterSpacing: { xs: '0.5px', md: '1px' }, 
-            fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-            lineHeight: 1.2
-          }}
-        >
-          Mahadeo Singhi Eye Hospital
+      <Paper elevation={3} sx={{bgcolor: 'primary.main', color: 'white', py: 1, textAlign: 'center'}}>
+        <Typography variant="h6">
+          Mahadeo Singhi Eye and Multispeciality Hospital
         </Typography>
-        <Typography 
-          variant="h4" 
-          sx={{ 
-            fontWeight: 500, 
-            fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem', lg: '2rem' }, 
-            letterSpacing: '0.5px', 
-            mt: { xs: 0.5, md: 1 }, 
-            opacity: 0.95 
-          }}
-        >
-          {opdName}
-        </Typography>
+        
       </Paper>
 
-      <Container 
-        maxWidth={false} 
-        sx={{ 
-          flexGrow: 1, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          py: { xs: 1, sm: 1.5, md: 2 }, 
-          px: { xs: 1, sm: 2, md: 4 }, 
-          width: '100%' 
-        }}
-      >
+      <Container maxWidth={false} sx={{ mt: 1, mb: 1, px: 3, width: '100%' }}>
           {lastUpdated && (
-            <Typography 
-              variant="h6" 
-              color="text.secondary" 
-              align="center" 
-              gutterBottom
-              sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' } }}
-            >
+            <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
               Last Updated: {lastUpdated.toLocaleTimeString()}
             </Typography>
           )}
 
-          {/* Current Patient - Large Display */}
-          {opd.current_patient ? (
-            <Paper
-              elevation={6}
-              sx={{
-                p: { xs: 2, sm: 3, md: 4, lg: 6 },
-                mb: { xs: 2, sm: 3, md: 4 },
-                bgcolor: 'primary.main',
-                color: 'primary.contrastText',
-                textAlign: 'center',
-                width: '100%',
-              }}
-            >
-              <Typography 
-                variant="h4" 
-                gutterBottom 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  fontSize: { xs: '1rem', sm: '1.25rem', md: '1.75rem', lg: '2.5rem' }, 
-                  letterSpacing: { xs: '0.5px', md: '1px' } 
-                }}
-              >
-                CURRENTLY BEING SERVED
-              </Typography>
-              <Box display="flex" alignItems="center" justifyContent="center" my={{ xs: 2, sm: 3, md: 4 }}>
-                <Box sx={{ textAlign: 'center', width: '100%' }}>
-                  <Typography 
-                    variant="h2" 
-                    component="div" 
-                    sx={{ 
-                      fontWeight: 'bold', 
-                      fontSize: { xs: '1.5rem', sm: '2.5rem', md: '3.5rem', lg: '5rem' }, 
-                      letterSpacing: { xs: '1px', md: '2px' },
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word'
-                    }}
-                  >
-                    {opd.current_patient.token_number.slice(-3)} - {opd.current_patient.patient_name}
-                  </Typography>
-                  
-                </Box>
-              </Box>
-            </Paper>
-          ) : (
-            <Paper
-              elevation={6}
-              sx={{
-                p: { xs: 2, sm: 3, md: 4, lg: 6 },
-                mb: { xs: 2, sm: 3, md: 4 },
-                bgcolor: 'grey.300',
-                color: 'text.primary',
-                textAlign: 'center',
-              }}
-            >
-              <Typography 
-                variant="h3" 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2.25rem', lg: '3rem' } 
-                }}
-              >
-                No Patient Currently Being Served
-              </Typography>
-            </Paper>
-          )}
+          <Grid container spacing={3}>
+            {displayData?.opds?.map((opd) => (
+            <Grid item xs={12} md={12} key={opd.opd_type}>
+              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Box display="flex" alignItems="center" mb={2}>
+                    <LocalHospital color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="h5" component="h2" textAlign="center">
+                      {getOPDByCode(opd.opd_type)?.opd_name || opd.opd_type.toUpperCase()}
+                    </Typography>
+                  </Box>
 
-          {/* Next Patients - Large List */}
-          <Card sx={{ flexGrow: 1, width: '100%' }}>
-            <CardContent sx={{ px: { xs: 1, sm: 2, md: 4 }, py: { xs: 2, sm: 3 } }}>
-              <Typography 
-                variant="h4" 
-                gutterBottom 
-                sx={{ 
-                  fontWeight: 'bold', 
-                  fontSize: { xs: '1.25rem', sm: '1.75rem', md: '2rem', lg: '2.5rem' }, 
-                  mb: { xs: 2, sm: 2.5, md: 3 }, 
-                  letterSpacing: { xs: '0.5px', md: '1px' } 
-                }}
-              >
-                NEXT IN QUEUE ({opd.next_patients?.length || 0})
-              </Typography>
-              
-              {opd.next_patients && opd.next_patients.length > 0 ? (
-                <List sx={{ width: '100%' }}>
-                  {opd.next_patients.map((patient, index) => (
-                    <React.Fragment key={index}>
-                      <ListItem 
-                        sx={{ 
-                          py: { xs: 1.5, sm: 2, md: 3 },
-                          px: { xs: 1, sm: 1.5, md: 2 },
-                          display: 'flex',
-                          flexDirection: { xs: 'column', sm: 'row' },
-                          alignItems: { xs: 'flex-start', sm: 'center' },
-                          gap: { xs: 1, sm: 2, md: 3 }
-                        }}
+                  {/* Current Patient - Large Display */}
+                  {opd.current_patient ? (
+                    <Paper elevation={6} sx={{p: 1, mb: 1, bgcolor: 'primary.light', color: 'primary.contrastText'}}>
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 'bold', textAlign: "center"}}>
+                          {opd.current_patient.token_number.slice(-3)} - {opd.current_patient.patient_name}
+                        </Typography>
+                      </Box>
+                    </Paper>
+                  ) : (
+                    <Paper elevation={6} sx={{p:1,mb:1,bgcolor: 'grey.300',color: 'text.primary',textAlign: 'center'}}>
+                      <Typography variant="body" sx={{ fontWeight: 'bold'}}>
+                        No Patient Currently Being Served
+                      </Typography>
+                    </Paper>
+                  )}
+          
+                    {/* Next Patients - Large List */}
+                    {opd.next_patients && opd.next_patients.length > 0 ? (
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gap: 2,
+                          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                          width: '100%',
+                          alignItems: 'start'}}
                       >
-                        {/* Position Number */}
-                        <Box 
-                          sx={{ 
-                            minWidth: { xs: 'auto', sm: '60px', md: '80px' },
-                            width: { xs: '100%', sm: 'auto' },
-                            display: 'flex',
-                            justifyContent: { xs: 'flex-start', sm: 'center' },
-                            alignItems: 'center'
-                          }}
-                        >
-                          <Typography 
-                            variant="h3" 
-                            color="primary" 
-                            sx={{ 
-                              fontWeight: 'bold', 
-                              fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem', lg: '3rem' },
-                              lineHeight: 1
-                            }}
-                          >
-                            {patient.position}
-                          </Typography>
-                        </Box>
+                      {columns.map((col, colIndex) => (
+                      <List
+                      key={`col-${colIndex}`}
+                      dense
+                      sx={{
+                        width: '100%',
+                        maxHeight: '62vh',
+                        overflowY: 'auto',
+                        bgcolor: 'transparent',
+                        '& .MuiListItem-root': { py: 0.75 },
+                      }}
+                    >
+                        {col.map((patient, index) => (
+                          <React.Fragment key={index}>
+                            <ListItem sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1 }}>
+                                
+                              {/* Position Number */}
+                              <Box sx={{ minWidth: '35px', display: 'flex', justifyContent: 'center' }}>
+                                <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
+                                  {patient.position}
+                                </Typography>
+                              </Box>
+                                  
+                              {/* Patient Info */}
+                              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                                <Typography 
+                                  variant="body1" 
+                                  sx={{ 
+                                    fontWeight: 'bold',
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis', 
+                                    whiteSpace: 'nowrap',
+                                    lineHeight: 1.3
+                                  }}
+                                >
+                                  {patient.token_number.slice(-3)} - {patient.patient_name}
+                                </Typography>
+                                
+                              </Box>
 
-                        {/* Patient Info */}
-                        <Box sx={{ flexGrow: 1, minWidth: 0, width: { xs: '100%', sm: 'auto' } }}>
-                          <Typography 
-                            variant="h4" 
-                            sx={{ 
-                              fontSize: { xs: '1rem', sm: '1.5rem', md: '2rem', lg: '2.5rem' }, 
-                              fontWeight: 'bold',
-                              lineHeight: 1.2,
-                              mb: { xs: 0.5, sm: 0.5 },
-                              wordBreak: 'break-word',
-                              overflowWrap: 'break-word'
-                            }}
-                          >
-                            {patient.token_number.slice(-3)} - {patient.patient_name}
-                          </Typography>
-                          
-                        </Box>
-
-                        {/* Status Chips */}
-                        <Box 
-                          display="flex" 
-                          alignItems="center" 
-                          gap={{ xs: 1, sm: 1.5, md: 2 }} 
-                          sx={{ 
-                            flexShrink: 0,
-                            flexWrap: 'wrap',
-                            width: { xs: '100%', sm: 'auto' },
-                            justifyContent: { xs: 'flex-start', sm: 'flex-end' }
-                          }}
-                        >
-                          <Chip
-                            label={getStatusLabel(patient.status)}
-                            color={getStatusColor(patient.status)}
-                            sx={{ 
-                              fontSize: { xs: '0.75rem', sm: '1rem', md: '1.25rem', lg: '1.5rem' }, 
-                              padding: { xs: '8px 12px', sm: '12px 14px', md: '16px 16px', lg: '24px 16px' }, 
-                              height: 'auto',
-                              fontWeight: 'bold'
-                            }}
-                          />
-                          {patient.is_dilated && (
-                            <Chip
-                              label="Dilated"
-                              color="secondary"
-                              sx={{ 
-                                fontSize: { xs: '0.75rem', sm: '1rem', md: '1.25rem', lg: '1.5rem' }, 
-                                padding: { xs: '8px 12px', sm: '12px 14px', md: '16px 16px', lg: '24px 16px' }, 
-                                height: 'auto',
-                                fontWeight: 'bold'
-                              }}
-                            />
-                          )}
-                        </Box>
-                      </ListItem>
-                      {index < opd.next_patients.length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))}
-                </List>
-              ) : (
-                <Typography 
-                  variant="h5" 
-                  color="text.secondary" 
-                  align="center" 
-                  sx={{ 
-                    py: { xs: 2, sm: 3, md: 4 }, 
-                    fontSize: { xs: '1rem', sm: '1.5rem', md: '2rem' } 
-                  }}
-                >
-                  No patients in queue
-                </Typography>
-              )}
-
-              {/* Queue Statistics */}
-              <Box 
-                mt={{ xs: 2, sm: 3, md: 4 }} 
-                p={{ xs: 2, sm: 2.5, md: 3 }} 
-                bgcolor="grey.100" 
-                borderRadius={2}
-              >
-                <Typography 
-                  variant="h5" 
-                  color="text.primary" 
-                  sx={{ 
-                    fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem', lg: '2rem' }, 
-                    fontWeight: 'bold', 
-                    letterSpacing: '0.5px' 
-                  }}
-                >
-                  TOTAL PATIENTS: {opd.total_patients}
-                </Typography>
-                {opd.estimated_wait_time && (
-                  <Typography 
-                    variant="h5" 
-                    color="text.primary" 
-                    sx={{ 
-                      fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem', lg: '2rem' }, 
-                      mt: { xs: 0.5, sm: 1 }, 
-                      letterSpacing: '0.5px' 
-                    }}
-                  >
-                    EST. WAIT TIME: {opd.estimated_wait_time} minutes
-                  </Typography>
-                )}
-              </Box>
-            </CardContent>
-          </Card>
-        </Container>
+                              {/* Status Chips */}
+                              <Box 
+                                display="flex" 
+                                alignItems="center" 
+                                gap={1} 
+                                sx={{flexShrink: 0}}
+                              >
+                                <Chip
+                                  label={getStatusLabel(patient.status)}
+                                  color={getStatusColor(patient.status)}
+                                  size="small"
+                                />
+                              </Box>
+                            </ListItem>
+                            {index < opd.next_patients.length - 1 && <Divider />}
+                          </React.Fragment>
+                        ))}
+                      </List>
+                      ))}
+                      </Box>
+                    
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" align="center">
+                        No patients in queue
+                      </Typography>
+                    )}
+                </CardContent>
+              </Card>
+           </Grid>
+            ))}
+         </Grid>
+      </Container>
       </Box>
     );
   }
@@ -567,16 +422,13 @@ const DisplayScreen = ({ opdCode = null }) => {
   return (
     <Box sx={{ flexGrow: 1, bgcolor: '#f5f5f5', minHeight: '100vh' }}>
       {/* Simple Header for LED Display */}
-      <Paper elevation={3} sx={{ bgcolor: 'primary.main', color: 'white', py: 3, mb: 2, textAlign: 'center' }}>
-        <Typography variant="h3" sx={{ fontWeight: 700, fontSize: '3rem', letterSpacing: '1px', fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif' }}>
-          Mahadeo Singhi Eye Hospital
-        </Typography>
-        <Typography variant="h4" sx={{ fontWeight: 500, fontSize: '2rem', letterSpacing: '0.5px', mt: 1, opacity: 0.95 }}>
-          Patient Queue Display
+      <Paper elevation={3} sx={{ bgcolor: 'primary.main', color: 'white', py: 1, textAlign: 'center' }}>
+        <Typography variant="h6">
+          Mahadeo Singhi Eye and Multispeciality Hospital
         </Typography>
       </Paper>
 
-      <Container maxWidth={false} sx={{ mt: 2, mb: 2, px: 3, width: '100%' }}>
+      <Container maxWidth={false} sx={{ mt: 1, mb: 1, px: 3, width: '100%' }}>
         {lastUpdated && (
           <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
             Last Updated: {lastUpdated.toLocaleTimeString()}
@@ -584,10 +436,10 @@ const DisplayScreen = ({ opdCode = null }) => {
         )}
 
         <Grid container spacing={3}>
-          {displayData?.opds?.map((opd) => (
-            <Grid item xs={12} md={4} key={opd.opd_type}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardContent sx={{ flexGrow: 1 }}>
+          {displayData?.opds?.map((opd, index) => (
+            <Grid item xs={12} md={index < 3 ? 4 : 6} key={opd.opd_type}>
+              <Card sx={{ height: '42vh', display: 'flex', flexDirection: 'column' }}>
+                <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p:2 }}>
                   <Box display="flex" alignItems="center" mb={2}>
                     <LocalHospital color="primary" sx={{ mr: 1 }} />
                     <Typography variant="h5" component="h2">
@@ -599,31 +451,28 @@ const DisplayScreen = ({ opdCode = null }) => {
                   {opd.current_patient && (
                     <Paper
                       elevation={3}
-                      sx={{
-                        p: 2,
-                        mb: 2,
-                        bgcolor: 'primary.light',
-                        color: 'primary.contrastText',
-                      }}
-                    >
-                      <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                        CURRENTLY BEING SERVED
-                      </Typography>
+                      sx={{p:0.5, mb:0.5, bgcolor: 'primary.light', color: 'primary.contrastText'}}>                  
                       <Box>
-                        <Typography variant="h4" component="div" sx={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                        <Typography variant="h6" sx={{ fontWeight: 'bold', textAlign: "center"}}>
                           {opd.current_patient.token_number.slice(-3)} - {opd.current_patient.patient_name}
                         </Typography>
-                        
                       </Box>
                     </Paper>
                   )}
-
-                  {/* Next Patients */}
-                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                    NEXT IN QUEUE ({opd.next_patients?.length || 0})
-                  </Typography>
                   
                   {opd.next_patients && opd.next_patients.length > 0 ? (
+                    <Box
+                    sx={{flexGrow: 1, overflowY: 'auto', pr: 1,
+                      // Optional: scrollbar styling for TV
+                      '&::-webkit-scrollbar': {
+                        width: '6px',
+                      },
+                      '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: '#bdbdbd',
+                        borderRadius: '4px',
+                      },
+                    }}
+                  >
                     <List dense sx={{ width: '100%' }}>
                       {opd.next_patients.map((patient, index) => (
                         <React.Fragment key={index}>
@@ -659,36 +508,25 @@ const DisplayScreen = ({ opdCode = null }) => {
                                 color={getStatusColor(patient.status)}
                                 size="small"
                               />
-                              {patient.is_dilated && (
+                              {/* {patient.is_dilated && (
                                 <Chip
                                   label="Dilated"
                                   color="secondary"
                                   size="small"
                                 />
-                              )}
+                              )} */}
                             </Box>
                           </ListItem>
                           {index < opd.next_patients.length - 1 && <Divider />}
                         </React.Fragment>
                       ))}
                     </List>
+                    </Box>
                   ) : (
                     <Typography variant="body2" color="text.secondary" align="center">
                       No patients in queue
                     </Typography>
                   )}
-
-                  {/* Queue Statistics */}
-                  <Box mt={2} p={2} bgcolor="grey.100" borderRadius={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      Total Patients: {opd.total_patients}
-                    </Typography>
-                    {opd.estimated_wait_time && (
-                      <Typography variant="body2" color="text.secondary">
-                        Est. Wait Time: {opd.estimated_wait_time} minutes
-                      </Typography>
-                    )}
-                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -696,7 +534,7 @@ const DisplayScreen = ({ opdCode = null }) => {
         </Grid>
 
         {/* Summary Statistics */}
-        {displayData && (
+        {/* {displayData && (
           <Box mt={4}>
             <Card>
               <CardContent>
@@ -749,7 +587,7 @@ const DisplayScreen = ({ opdCode = null }) => {
               </CardContent>
             </Card>
           </Box>
-        )}
+        )} */}
       </Container>
     </Box>
   );

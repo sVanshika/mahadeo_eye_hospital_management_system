@@ -126,6 +126,27 @@ const AdminPanel = () => {
     }
   };
 
+  const handleDeletePatient = async (patientId, patientName, tokenNumber) => {
+    if (!window.confirm(`Are you sure you want to delete patient "${patientName}" (Token: ${tokenNumber})? This will permanently delete all their records.`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiClient.delete(`/admin/patients/${patientId}`);
+      setSuccess(`Patient ${patientName} deleted successfully`);
+      fetchPatientFlows(); // Refresh the list
+      fetchDashboardStats(); // Refresh dashboard stats
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (error) {
+      console.error('Failed to delete patient:', error);
+      setError(error.response?.data?.detail || 'Failed to delete patient');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // OPD Access Management Functions
   const handleOpenOPDAccessDialog = async (user) => {
     setSelectedUser(user);
@@ -646,6 +667,7 @@ const AdminPanel = () => {
                       <TableCell>Status</TableCell>
                       <TableCell>Time</TableCell>
                       <TableCell>Notes</TableCell>
+                      <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -667,6 +689,20 @@ const AdminPanel = () => {
                           {new Date(flow.timestamp).toLocaleString()}
                         </TableCell>
                         <TableCell>{flow.notes || '-'}</TableCell>
+                        <TableCell>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDeletePatient(
+                              flow.patient_id,
+                              flow.patient_name,
+                              flow.token_number
+                            )}
+                            disabled={loading}
+                          >
+                            <Delete />
+                          </IconButton>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
