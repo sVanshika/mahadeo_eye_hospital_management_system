@@ -56,6 +56,18 @@ class UserCreate(BaseModel):
             data['password'] = data['password'][:72]
         super().__init__(**data)
 
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[UserRole] = None
+    
+    def __init__(self, **data):
+        # Truncate password if it's too long
+        if 'password' in data and data['password'] and len(data['password'].encode('utf-8')) > 72:
+            data['password'] = data['password'][:72]
+        super().__init__(**data)
+
 class UserResponse(BaseModel):
     id: int
     username: str

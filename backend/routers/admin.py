@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel
 from database import get_db, User, Room, Patient, Queue, PatientStatus, OPD, PatientFlow, UserRole, get_ist_now, UserOPDAccess, get_user_opd_access
-from auth import get_current_active_user, User, require_role, UserCreate, UserResponse
+from auth import get_current_active_user, require_role, UserCreate, UserUpdate, UserResponse
 
 router = APIRouter()
 
@@ -151,6 +151,46 @@ async def get_users(
 ):
     users = db.query(User).filter(User.is_active == True).all()
     return users
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    """Update user details (Admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update username if provided and not duplicate
+    if user_data.username is not None and user_data.username != user.username:
+        existing_user = db.query(User).filter(User.username == user_data.username).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        user.username = user_data.username
+    
+    # Update email if provided and not duplicate
+    if user_data.email is not None and user_data.email != user.email:
+        existing_user = db.query(User).filter(User.email == user_data.email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already exists")
+        user.email = user_data.email
+    
+    # Update password if provided
+    if user_data.password is not None and user_data.password.strip():
+        from auth import get_password_hash
+        user.hashed_password = get_password_hash(user_data.password)
+    
+    # Update role if provided
+    if user_data.role is not None:
+        user.role = user_data.role
+    
+    db.commit()
+    db.refresh(user)
+    
+    return user
 
 @router.put("/users/{user_id}/deactivate")
 async def deactivate_user(
