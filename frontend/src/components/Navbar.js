@@ -15,7 +15,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import hospitalLogo from "../hospital-logo.png";
+// Hospital logo from public folder
+const hospitalLogo = "/hospital-logo.png";
 
 
 const Navbar = ({ onRefresh, showRefresh = true, pageTitle = "" }) => {
