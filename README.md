@@ -119,30 +119,6 @@ postgresql://username:password@host:port/database_name
 postgresql://user:password@host-url:5432/database_name
 ```
 
-## 🔧 Troubleshooting
-
-### Database Connection Issues
-
-**Error: "password authentication failed"**
-- Check your password is correct in `.env` file
-- Verify username and database name
-
-**Error: "could not translate host name"**
-- Check if PostgreSQL is running
-- Verify host address in `DATABASE_URL`
-- If using `localhost`, try `127.0.0.1`
-
-**Error: "database does not exist"**
-- Create the database: `CREATE DATABASE "Eye-Hospital";`
-- Make sure the database name matches exactly (case-sensitive)
-
-### Port Already in Use
-
-If port 8000 is busy, change it in `main.py` or use:
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8001
-```
-
 ## 📁 Project Structure
 
 ```
