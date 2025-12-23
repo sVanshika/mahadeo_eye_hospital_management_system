@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import apiClient from '../apiClient';
 import { useAuth } from './AuthContext';
 
@@ -21,21 +21,31 @@ export const OPDProvider = ({ children }) => {
   const [error, setError] = useState(null);
   
 
-  const fetchOPDs = async () => {
+  const fetchOPDs = useCallback(async () => {
     try {
       setLoading(true);
-      //console.log('Fetching OPDs from backend...');
-      const response = await apiClient.get('/opd-management/public');
-      //console.log('OPDs fetched:', response.data);
-      setOpds(response.data);
+      console.log('Fetching OPDs from backend...', { user: user?.username, role: user?.role });
+      // For admin users, fetch all OPDs (including inactive). For others, use public endpoint with active only
+      if (user && user.role === 'admin') {
+        console.log('Admin user detected, fetching all OPDs (including inactive)');
+        const response = await apiClient.get('/opd-management/?active_only=false');
+        console.log('OPDs fetched (admin):', response.data);
+        setOpds(response.data || []);
+      } else {
+        console.log('Non-admin user or no user, fetching active OPDs only');
+        const response = await apiClient.get('/opd-management/public');
+        console.log('OPDs fetched (public):', response.data);
+        setOpds(response.data || []);
+      }
       setError(null);
     } catch (err) {
       console.error('Failed to fetch OPDs:', err);
       setError(err.response?.data?.detail || 'Failed to fetch OPDs');
+      setOpds([]); // Set empty array on error to prevent stale data
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   const createOPD = async (opdData) => {
     try {
@@ -126,7 +136,7 @@ export const OPDProvider = ({ children }) => {
 
   useEffect(() => {
     fetchOPDs();
-  }, []);
+  }, [fetchOPDs]); // Refetch when user changes (e.g., after login)
 
   const value = {
     opds,

@@ -157,3 +157,4 @@ mahadeo_eye_hospital_management_system/
 
 Check the API documentation at `http://localhost:8000/docs` when the backend is running.
 
+
