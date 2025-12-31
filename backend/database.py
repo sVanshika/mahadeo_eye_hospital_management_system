@@ -18,7 +18,9 @@ def get_ist_now():
 
 # Database URL - PostgreSQL from environment variable
 # Default connection string for "Eye-Hospital" database (update password in .env file)
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:YOUR_PASSWORD@localhost:5432/Eye-Hospital")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set")
 
 # Handle PostgreSQL connection URL format (Render.com uses postgres:// but SQLAlchemy needs postgresql://)
 if DATABASE_URL.startswith("postgres://"):

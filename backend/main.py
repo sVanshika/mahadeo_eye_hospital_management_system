@@ -18,7 +18,7 @@ from migrate_dilation_flag import add_dilation_flag_column
 load_dotenv()
 
 # Create database tables
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,6 +38,10 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=False  # Disable automatic trailing slash redirects
 )
+
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
 
 # CORS middleware - Configure allowed origins from environment variable
 cors_origins_str = os.getenv("CORS_ORIGINS", "*")
