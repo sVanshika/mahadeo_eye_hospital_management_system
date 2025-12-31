@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -47,7 +47,7 @@ async def get_public_opds(
 
 @router.get("/", response_model=List[OPDResponse])
 async def get_opds(
-    active_only: bool = True,
+    active_only: bool = Query(True, description="Filter to show only active OPDs"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
